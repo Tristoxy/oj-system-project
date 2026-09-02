@@ -1,0 +1,15 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      OJ_JUDGE_BACKEND: local
+    volumes:
+      - ./data:/app/data
+
+# For the Advance 3 sandbox, run the API on a Docker-enabled host with:
+#   OJ_JUDGE_BACKEND=docker uvicorn app.main:app
+# The judge then starts a fresh network-disabled, memory-limited container for
+# every compile/run command. The API container above intentionally defaults to
+# local mode because mounting a host Docker socket is not portable or safe.

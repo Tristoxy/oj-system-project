@@ -1,0 +1,9 @@
+[project]
+name = "python-course-oj"
+version = "1.0.0"
+description = "A small online judge for the Python programming course"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
