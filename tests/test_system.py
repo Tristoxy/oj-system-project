@@ -36,3 +36,16 @@ def test_export_reset_and_import(
         json={"username": "admin", "password": "admintestpassword"},
     )
     assert len(admin_client.get("/api/problems/").json()["data"]) == 1
+
+
+def test_import_rejects_malformed_password_hash(admin_client: TestClient) -> None:
+    bundle = admin_client.get("/api/export/").json()["data"]
+    bundle["users"][0]["password"] = "pbkdf2_sha256$999999999$bad$bad"
+
+    response = admin_client.post(
+        "/api/import/",
+        files={"file": ("backup.json", json.dumps(bundle), "application/json")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == 400

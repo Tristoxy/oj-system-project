@@ -71,3 +71,28 @@ def test_cpp_judging(
 def test_submission_list_requires_primary_filter(admin_client: TestClient) -> None:
     response = admin_client.get("/api/submissions/")
     assert response.status_code == 400
+
+
+def test_time_limit_is_reported_in_log(admin_client: TestClient) -> None:
+    payload = {
+        "id": "spin",
+        "title": "Spin",
+        "description": "Never finish.",
+        "input_description": "None.",
+        "output_description": "None.",
+        "samples": [{"input": "", "output": ""}],
+        "constraints": "",
+        "testcases": [{"input": "", "output": ""}],
+        "time_limit": 0.05,
+        "memory_limit": 128,
+    }
+    add_problem(admin_client, payload)
+    response = admin_client.post(
+        "/api/submissions/",
+        json={"problem_id": "spin", "language": "python", "code": "while True: pass"},
+    )
+    submission_id = response.json()["data"]["submission_id"]
+
+    assert wait_for_result(admin_client, submission_id)["score"] == 0
+    detail = admin_client.get(f"/api/submissions/{submission_id}/log").json()["data"]
+    assert detail["details"][0]["result"] == "TLE"

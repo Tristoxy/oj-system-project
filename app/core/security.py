@@ -11,6 +11,7 @@ from app.core.exceptions import ApiError
 
 
 PASSWORD_ITERATIONS = 240_000
+MAX_PASSWORD_ITERATIONS = 1_000_000
 ALLOWED_EXECUTABLES = {
     "python",
     "python3",
@@ -48,17 +49,39 @@ def verify_password(password: str, encoded: str) -> bool:
         algorithm, iterations_text, salt_text, expected_text = encoded.split("$", 3)
         if algorithm != "pbkdf2_sha256":
             return False
-        salt = base64.b64decode(salt_text)
-        expected = base64.b64decode(expected_text)
+        iterations = int(iterations_text)
+        if not 1 <= iterations <= MAX_PASSWORD_ITERATIONS:
+            return False
+        salt = base64.b64decode(salt_text, validate=True)
+        expected = base64.b64decode(expected_text, validate=True)
+        if len(salt) < 16 or len(expected) != hashlib.sha256().digest_size:
+            return False
         actual = hashlib.pbkdf2_hmac(
             "sha256",
             password.encode("utf-8"),
             salt,
-            int(iterations_text),
+            iterations,
         )
         return hmac.compare_digest(actual, expected)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, base64.binascii.Error):
         return False
+
+
+def is_password_hash(encoded: str) -> bool:
+    """Validate an imported hash without doing an expensive password check."""
+    try:
+        algorithm, iterations_text, salt_text, digest_text = encoded.split("$", 3)
+        iterations = int(iterations_text)
+        salt = base64.b64decode(salt_text, validate=True)
+        digest = base64.b64decode(digest_text, validate=True)
+    except (ValueError, TypeError, base64.binascii.Error):
+        return False
+    return (
+        algorithm == "pbkdf2_sha256"
+        and 1 <= iterations <= MAX_PASSWORD_ITERATIONS
+        and len(salt) >= 16
+        and len(digest) == hashlib.sha256().digest_size
+    )
 
 
 def validate_command_template(command: str, *, require_src: bool = False) -> None:

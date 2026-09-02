@@ -47,3 +47,27 @@ def test_user_cannot_read_another_user(client: TestClient) -> None:
     response = client.get(f"/api/users/{second.json()['data']['user_id']}")
     assert first.status_code == 200
     assert response.status_code == 403
+
+
+def test_banned_user_with_existing_session_gets_403(client: TestClient) -> None:
+    registered = client.post(
+        "/api/users/",
+        json={"username": "charlie", "password": "secret3"},
+    )
+    user_id = registered.json()["data"]["user_id"]
+    client.post(
+        "/api/auth/login",
+        json={"username": "charlie", "password": "secret3"},
+    )
+    user_session = client.cookies.get("oj_session")
+
+    client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admintestpassword"},
+    )
+    assert client.put(f"/api/users/{user_id}/role", json={"role": "banned"}).status_code == 200
+
+    client.cookies.set("oj_session", user_session)
+    response = client.get("/api/problems/")
+    assert response.status_code == 403
+    assert response.json()["code"] == 403

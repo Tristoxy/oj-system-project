@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from app.core.exceptions import ApiError
-from app.core.security import hash_password
+from app.core.security import hash_password, is_password_hash
 from app.models.language import Language
 from app.models.problem import Problem
 from app.models.submission import Submission
@@ -69,8 +69,8 @@ class SystemService:
 
     async def import_data(self, bundle: ImportBundle) -> None:
         for user in bundle.users:
-            if not user.password.startswith("pbkdf2_sha256$"):
-                raise ApiError(400, "imported passwords must be hashed")
+            if not is_password_hash(user.password):
+                raise ApiError(400, "imported passwords must be valid hashes")
 
         def merge(state):
             self._merge(state["users"], [item.model_dump(mode="json") for item in bundle.users], "user_id")

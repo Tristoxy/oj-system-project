@@ -20,7 +20,7 @@ class SubmissionService:
     def __init__(self, store: StateStore, runner: JudgeRunner) -> None:
         self.store = store
         self.runner = runner
-        self._tasks: set[asyncio.Task] = set()
+        self._tasks: dict[str, asyncio.Task[None]] = {}
 
     async def submit(self, payload: SubmissionCreate, user: User) -> Submission:
         now = datetime.now(timezone.utc)
@@ -64,7 +64,7 @@ class SubmissionService:
             return submission
 
         submission = await self.store.mutate(create)
-        self._schedule(submission.submission_id)
+        await self._schedule(submission.submission_id)
         return submission
 
     async def get_submission(self, submission_id: str) -> Submission:
@@ -132,8 +132,22 @@ class SubmissionService:
             raise ApiError(404, "submission not found")
 
         submission = await self.store.mutate(reset)
-        self._schedule(submission_id)
+        await self._schedule(submission_id)
         return submission
+
+    async def resume_pending(self) -> None:
+        state = await self.store.read()
+        for item in state["submissions"]:
+            if item.get("status") == "pending":
+                await self._schedule(str(item["submission_id"]))
+
+    async def shutdown(self) -> None:
+        tasks = list(self._tasks.values())
+        self._tasks.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def wait(self, submission_id: str, timeout: float = 10) -> Submission:
         deadline = asyncio.get_running_loop().time() + timeout
@@ -144,10 +158,19 @@ class SubmissionService:
             await asyncio.sleep(0.02)
         raise TimeoutError(f"submission {submission_id} did not finish")
 
-    def _schedule(self, submission_id: str) -> None:
+    async def _schedule(self, submission_id: str) -> None:
+        previous = self._tasks.get(submission_id)
+        if previous is not None and not previous.done():
+            previous.cancel()
+            await asyncio.gather(previous, return_exceptions=True)
         task = asyncio.create_task(self._evaluate(submission_id))
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        self._tasks[submission_id] = task
+
+        def remove(done: asyncio.Task[None]) -> None:
+            if self._tasks.get(submission_id) is done:
+                self._tasks.pop(submission_id, None)
+
+        task.add_done_callback(remove)
 
     async def _evaluate(self, submission_id: str) -> None:
         try:

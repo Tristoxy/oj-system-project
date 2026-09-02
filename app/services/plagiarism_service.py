@@ -43,6 +43,23 @@ class PlagiarismService:
         background.add_done_callback(self._tasks.discard)
         return task
 
+    async def resume_pending(self) -> None:
+        state = await self.store.read()
+        for item in state["plagiarism_tasks"]:
+            if item.get("status") != "pending":
+                continue
+            background = asyncio.create_task(self._analyze(str(item["task_id"])))
+            self._tasks.add(background)
+            background.add_done_callback(self._tasks.discard)
+
+    async def shutdown(self) -> None:
+        tasks = list(self._tasks)
+        self._tasks.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     async def get(self, task_id: str) -> PlagiarismTask:
         state = await self.store.read()
         raw = next(

@@ -52,12 +52,6 @@ class UserService:
             for raw in state["users"]:
                 if raw["user_id"] == user_id:
                     raw["role"] = role
-                    if role == "banned":
-                        state["sessions"] = [
-                            session
-                            for session in state["sessions"]
-                            if session["user_id"] != user_id
-                        ]
                     return User.model_validate(raw)
             raise ApiError(404, "user not found")
 

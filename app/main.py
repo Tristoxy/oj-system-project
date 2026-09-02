@@ -19,7 +19,10 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await container.initialize()
-        yield
+        try:
+            yield
+        finally:
+            await container.close()
 
     application = FastAPI(
         title="Python Course OJ",

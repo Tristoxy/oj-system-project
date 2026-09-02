@@ -132,6 +132,8 @@ class JudgeRunner:
                 f"--memory={memory_limit}m",
                 "--cpus=1",
                 "--pids-limit=64",
+                "--cap-drop=ALL",
+                "--security-opt=no-new-privileges",
                 "--read-only",
                 "--tmpfs=/tmp:rw,noexec,nosuid,size=32m",
                 f"--volume={directory}:/workspace:rw",
@@ -171,17 +173,28 @@ class JudgeRunner:
         communicate = asyncio.create_task(process.communicate(stdin.encode("utf-8")))
         timed_out = False
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(communicate, timeout=timeout)
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                asyncio.shield(communicate),
+                timeout=timeout,
+            )
         except asyncio.TimeoutError:
             timed_out = True
             self._kill_process_tree(process)
             stdout_bytes, stderr_bytes = await communicate
+        except asyncio.CancelledError:
+            self._kill_process_tree(process)
+            await asyncio.gather(communicate, monitor, return_exceptions=True)
+            raise
         memory_mb, memory_exceeded = await monitor
+        await process.wait()
         elapsed = time.perf_counter() - started
         if memory_exceeded:
             result: CaseResult = "MLE"
         elif timed_out:
             result = "TLE"
+        elif process.returncode in {137, -signal.SIGKILL} and self.backend == "docker":
+            # Docker reports an OOM-killed container as SIGKILL/137.
+            result = "MLE"
         elif process.returncode != 0:
             result = "RE"
         else:

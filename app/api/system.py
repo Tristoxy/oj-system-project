@@ -24,6 +24,7 @@ async def reset_system(
     container: AppContainer = Depends(get_container),
 ) -> dict[str, object]:
     del admin
+    await container.cancel_background_tasks()
     await container.system.reset()
     response.delete_cookie(SESSION_COOKIE)
     return success_response(None, msg="system reset successfully")
@@ -52,5 +53,7 @@ async def import_data(
         bundle = ImportBundle.model_validate(raw)
     except (UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
         raise ApiError(400, "invalid import data") from exc
+    await container.cancel_background_tasks()
     await container.system.import_data(bundle)
+    await container.submissions.resume_pending()
     return success_response(None, msg="import success")

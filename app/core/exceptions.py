@@ -3,9 +3,9 @@
 from typing import Any
 
 from fastapi import FastAPI, Request, status
-from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 class ApiError(Exception):
@@ -43,8 +43,20 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=error_content(
                 status.HTTP_400_BAD_REQUEST,
                 "invalid request parameters",
-                jsonable_encoder(exc.errors()),
             ),
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def handle_http_error(
+        request: Request,
+        exc: StarletteHTTPException,
+    ) -> JSONResponse:
+        del request
+        message = exc.detail if isinstance(exc.detail, str) else "request failed"
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=error_content(exc.status_code, message),
+            headers=exc.headers,
         )
 
     @app.exception_handler(Exception)

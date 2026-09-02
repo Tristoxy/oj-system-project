@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.container import AppContainer
-from app.core.config import SESSION_COOKIE, SESSION_TTL_SECONDS
+from app.core.config import SESSION_COOKIE, SESSION_TTL_SECONDS, secure_cookies
 from app.core.responses import success_response
 from app.dependencies import get_container, get_current_user
 from app.models.user import Credentials, User
@@ -25,7 +25,7 @@ async def login(
         max_age=SESSION_TTL_SECONDS,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=secure_cookies(),
     )
     return success_response(
         {"user_id": user.user_id, "username": user.username, "role": user.role},

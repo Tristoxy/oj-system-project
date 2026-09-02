@@ -30,3 +30,12 @@ class AppContainer:
 
     async def initialize(self) -> None:
         await self.system.initialize()
+        await self.submissions.resume_pending()
+        await self.plagiarism.resume_pending()
+
+    async def cancel_background_tasks(self) -> None:
+        await self.submissions.shutdown()
+        await self.plagiarism.shutdown()
+
+    async def close(self) -> None:
+        await self.cancel_background_tasks()
