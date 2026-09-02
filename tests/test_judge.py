@@ -189,3 +189,32 @@ def test_user_statistics_count_unique_solved_problems(admin_client: TestClient) 
     user = admin_client.get("/api/users/1").json()["data"]
     assert user["submit_count"] == 3
     assert user["resolve_count"] == 2
+
+
+def test_excessive_output_is_stopped(admin_client: TestClient) -> None:
+    payload = {
+        "id": "output_limit",
+        "title": "Output limit",
+        "description": "Do not flood output.",
+        "input_description": "",
+        "output_description": "",
+        "samples": [],
+        "constraints": "",
+        "testcases": [{"input": "", "output": ""}],
+        "time_limit": 2,
+        "memory_limit": 128,
+    }
+    add_problem(admin_client, payload)
+    response = admin_client.post(
+        "/api/submissions/",
+        json={
+            "problem_id": "output_limit",
+            "language": "python",
+            "code": "print('x' * (5 * 1024 * 1024))",
+        },
+    )
+    submission_id = response.json()["data"]["submission_id"]
+
+    wait_for_result(admin_client, submission_id)
+    log = admin_client.get(f"/api/submissions/{submission_id}/log").json()["data"]
+    assert log["details"][0]["result"] == "UNK"

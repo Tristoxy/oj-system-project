@@ -96,13 +96,12 @@ def validate_command_template(command: str, *, require_src: bool = False) -> Non
     if require_src and "{src}" not in command:
         raise ApiError(400, "language command must contain {src}")
     try:
-        fields = [
-            field_name
-            for _, field_name, _, _ in string.Formatter().parse(command)
-            if field_name is not None
-        ]
+        parsed = list(string.Formatter().parse(command))
     except ValueError as exc:
         raise ApiError(400, "invalid language command template") from exc
+    fields = [field_name for _, field_name, _, _ in parsed if field_name is not None]
     unknown = {field_name for field_name in fields if field_name not in {"src", "exe"}}
     if unknown:
         raise ApiError(400, "language command contains unsupported placeholders")
+    if any(format_spec or conversion for _, _, format_spec, conversion in parsed):
+        raise ApiError(400, "language command contains unsupported formatting")

@@ -32,6 +32,8 @@ class ProcessResult:
 
 
 class JudgeRunner:
+    MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+
     def __init__(self, backend: str, spj_dir: Path) -> None:
         self.backend = backend
         self.spj_dir = spj_dir
@@ -62,10 +64,13 @@ class JudgeRunner:
                     language,
                 )
                 if compile_result.result != "AC":
+                    compile_case_result: CaseResult = (
+                        "UNK" if compile_result.result == "UNK" else "CE"
+                    )
                     return [
                         TestCaseResult(
                             id=index,
-                            result="CE",
+                            result=compile_case_result,
                             time=round(compile_result.elapsed, 4),
                             memory=round(compile_result.memory_mb, 2),
                         )
@@ -189,17 +194,17 @@ class JudgeRunner:
             return ProcessResult("UNK", stderr=str(exc))
 
         monitor = asyncio.create_task(self._monitor_memory(process, memory_limit))
-        communicate = asyncio.create_task(process.communicate(stdin.encode("utf-8")))
+        communicate = asyncio.create_task(self._communicate_limited(process, stdin))
         timed_out = False
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            stdout_bytes, stderr_bytes, output_exceeded = await asyncio.wait_for(
                 asyncio.shield(communicate),
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
             timed_out = True
             self._kill_process_tree(process)
-            stdout_bytes, stderr_bytes = await communicate
+            stdout_bytes, stderr_bytes, output_exceeded = await communicate
         except asyncio.CancelledError:
             self._kill_process_tree(process)
             await asyncio.gather(communicate, monitor, return_exceptions=True)
@@ -211,9 +216,14 @@ class JudgeRunner:
             result: CaseResult = "MLE"
         elif timed_out:
             result = "TLE"
-        elif process.returncode in {137, -signal.SIGKILL} and self.backend == "docker":
+        elif output_exceeded:
+            result = "UNK"
+        elif process.returncode in {137, -signal.SIGKILL} and not use_process_limit:
             # Docker reports an OOM-killed container as SIGKILL/137.
             result = "MLE"
+        elif process.returncode in {125, 126, 127} and not use_process_limit:
+            # Docker CLI/image/entrypoint failures are judge infrastructure errors.
+            result = "UNK"
         elif process.returncode != 0 and self._looks_like_memory_error(stderr_bytes):
             result = "MLE"
         elif process.returncode != 0:
@@ -227,6 +237,47 @@ class JudgeRunner:
             elapsed=elapsed,
             memory_mb=memory_mb,
         )
+
+    async def _communicate_limited(
+        self,
+        process: asyncio.subprocess.Process,
+        stdin: str,
+    ) -> tuple[bytes, bytes, bool]:
+        async def feed_input() -> None:
+            if process.stdin is None:
+                return
+            try:
+                process.stdin.write(stdin.encode("utf-8"))
+                await process.stdin.drain()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            finally:
+                process.stdin.close()
+
+        async def read_stream(
+            stream: asyncio.StreamReader | None,
+        ) -> tuple[bytes, bool]:
+            if stream is None:
+                return b"", False
+            captured = bytearray()
+            exceeded = False
+            while chunk := await stream.read(64 * 1024):
+                remaining = self.MAX_OUTPUT_BYTES - len(captured)
+                if remaining > 0:
+                    captured.extend(chunk[:remaining])
+                if len(chunk) > remaining and not exceeded:
+                    exceeded = True
+                    self._kill_process_tree(process)
+            return bytes(captured), exceeded
+
+        _, stdout_result, stderr_result = await asyncio.gather(
+            feed_input(),
+            read_stream(process.stdout),
+            read_stream(process.stderr),
+        )
+        stdout, stdout_exceeded = stdout_result
+        stderr, stderr_exceeded = stderr_result
+        return stdout, stderr, stdout_exceeded or stderr_exceeded
 
     @staticmethod
     def _memory_limiter(memory_limit: int):
