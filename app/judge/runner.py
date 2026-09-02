@@ -13,6 +13,11 @@ from pathlib import Path
 
 import psutil
 
+try:
+    import resource
+except ImportError:  # pragma: no cover - resource is unavailable on Windows
+    resource = None
+
 from app.models.language import Language
 from app.models.problem import Problem, TestCase
 from app.models.submission import CaseResult, TestCaseResult
@@ -146,7 +151,14 @@ class JudgeRunner:
         else:
             args = shlex.split(template.format(src=str(source), exe=str(executable)))
             process_memory = memory_limit
-        return await self._execute(args, stdin, timeout, process_memory, directory)
+        return await self._execute(
+            args,
+            stdin,
+            timeout,
+            process_memory,
+            directory,
+            use_process_limit=not docker,
+        )
 
     async def _execute(
         self,
@@ -155,8 +167,11 @@ class JudgeRunner:
         timeout: float,
         memory_limit: int,
         cwd: Path,
+        *,
+        use_process_limit: bool = True,
     ) -> ProcessResult:
         started = time.perf_counter()
+        preexec_fn = self._memory_limiter(memory_limit) if use_process_limit else None
         try:
             process = await asyncio.create_subprocess_exec(
                 *args,
@@ -165,6 +180,7 @@ class JudgeRunner:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
                 start_new_session=True,
+                preexec_fn=preexec_fn,
             )
         except (OSError, ValueError) as exc:
             return ProcessResult("UNK", stderr=str(exc))
@@ -195,6 +211,8 @@ class JudgeRunner:
         elif process.returncode in {137, -signal.SIGKILL} and self.backend == "docker":
             # Docker reports an OOM-killed container as SIGKILL/137.
             result = "MLE"
+        elif process.returncode != 0 and self._looks_like_memory_error(stderr_bytes):
+            result = "MLE"
         elif process.returncode != 0:
             result = "RE"
         else:
@@ -205,6 +223,31 @@ class JudgeRunner:
             stderr=stderr_bytes.decode("utf-8", errors="replace"),
             elapsed=elapsed,
             memory_mb=memory_mb,
+        )
+
+    @staticmethod
+    def _memory_limiter(memory_limit: int):
+        if resource is None or os.name != "posix":
+            return None
+
+        limit_bytes = memory_limit * 1024 * 1024
+
+        def apply_limit() -> None:
+            resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+
+        return apply_limit
+
+    @staticmethod
+    def _looks_like_memory_error(stderr: bytes) -> bool:
+        lowered = stderr.lower()
+        return any(
+            marker in lowered
+            for marker in (
+                b"memoryerror",
+                b"std::bad_alloc",
+                b"cannot allocate memory",
+                b"out of memory",
+            )
         )
 
     async def _monitor_memory(
