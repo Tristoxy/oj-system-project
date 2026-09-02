@@ -38,5 +38,33 @@ def test_plagiarism_task(
             break
         time.sleep(0.02)
     assert result["status"] == "success"
+    assert result["submission_count"] == 2
+    assert result["pair_count"] == 1
+    assert result["clone_count"] == 1
     assert result["matches"][0]["is_clone"] is True
-    assert admin_client.get(f"/api/plagiarism/{task_id}/report").status_code == 200
+    assert result["matches"][0]["node_mapping"]
+    report = admin_client.get(f"/api/plagiarism/{task_id}/report")
+    assert report.status_code == 200
+    assert report.json()["summary"]["clone_count"] == 1
+
+
+def test_plagiarism_endpoints_require_admin(
+    client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    client.post(
+        "/api/users/",
+        json={"username": "alice", "password": "secret1"},
+    )
+    client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "secret1"},
+    )
+
+    response = client.post(
+        "/api/plagiarism/",
+        json={"problem_id": str(problem_payload["id"]), "threshold": 0.8},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 403

@@ -12,7 +12,7 @@ from app.models.plagiarism import (
     PlagiarismTask,
 )
 from app.models.submission import Submission
-from app.plagiarism.pdg import build_pdg, graph_similarity
+from app.plagiarism.pdg import build_pdg, graph_similarity, map_similar_nodes
 from app.repositories.state_store import StateStore
 from app.services.state_helpers import next_numeric_id
 
@@ -107,6 +107,10 @@ class PlagiarismService:
                             right_submission_id=right.submission_id,
                             similarity=similarity,
                             is_clone=similarity >= task.threshold,
+                            node_mapping=map_similar_nodes(
+                                graphs[left.submission_id],
+                                graphs[right.submission_id],
+                            ),
                         )
                     )
             matches.sort(key=lambda item: item.similarity, reverse=True)
@@ -120,6 +124,9 @@ class PlagiarismService:
                         item.update(
                             status="success",
                             matches=[match.model_dump(mode="json") for match in matches],
+                            submission_count=len(submissions),
+                            pair_count=len(matches),
+                            clone_count=sum(match.is_clone for match in matches),
                         )
 
             await self.store.mutate(finish)
@@ -127,15 +134,22 @@ class PlagiarismService:
                 "task_id": task_id,
                 "problem_id": task.problem_id,
                 "threshold": task.threshold,
+                "summary": {
+                    "submission_count": len(submissions),
+                    "pair_count": len(matches),
+                    "clone_count": sum(match.is_clone for match in matches),
+                },
                 "matches": [match.model_dump(mode="json") for match in matches],
             }
             self.store.report_dir.mkdir(parents=True, exist_ok=True)
             path = self.store.report_dir / f"plagiarism-{task_id}.json"
+            temporary = path.with_suffix(".json.tmp")
             await asyncio.to_thread(
-                path.write_text,
+                temporary.write_text,
                 json.dumps(report, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
+            await asyncio.to_thread(temporary.replace, path)
         except Exception:
             def fail(state):
                 for item in state["plagiarism_tasks"]:

@@ -86,7 +86,7 @@ async def upload_spj(
     container: AppContainer = Depends(get_container),
 ) -> dict[str, object]:
     del admin
-    content = await file.read()
+    content = await file.read(256_001)
     await container.problems.save_spj(problem_id, file.filename or "", content)
     return success_response({"problem_id": problem_id}, msg="SPJ uploaded")
 

@@ -1,5 +1,6 @@
 """Business rules for problem management and Special Judge files."""
 
+import asyncio
 import ast
 from pathlib import Path
 
@@ -72,21 +73,72 @@ class ProblemService:
             tree = ast.parse(text)
         except (UnicodeDecodeError, SyntaxError) as exc:
             raise ApiError(400, "invalid SPJ script") from exc
-        forbidden_imports = {"os", "subprocess", "socket", "shutil"}
-        forbidden_calls = {"eval", "exec", "compile", "__import__"}
+        allowed_imports = {
+            "collections",
+            "decimal",
+            "fractions",
+            "functools",
+            "itertools",
+            "math",
+            "re",
+            "statistics",
+            "sys",
+        }
+        forbidden_calls = {
+            "__import__",
+            "compile",
+            "delattr",
+            "eval",
+            "exec",
+            "getattr",
+            "globals",
+            "locals",
+            "setattr",
+            "vars",
+        }
+        forbidden_attributes = {
+            "chmod",
+            "chown",
+            "kill",
+            "popen",
+            "remove",
+            "rename",
+            "replace",
+            "rmdir",
+            "system",
+            "unlink",
+            "write_bytes",
+            "write_text",
+        }
         for node in ast.walk(tree):
             if isinstance(node, ast.Import) and any(
-                alias.name.split(".")[0] in forbidden_imports for alias in node.names
+                alias.name.split(".")[0] not in allowed_imports for alias in node.names
             ):
                 raise ApiError(400, "unsafe SPJ import")
-            if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] in forbidden_imports:
+            if isinstance(node, ast.ImportFrom) and (
+                node.module or ""
+            ).split(".")[0] not in allowed_imports:
                 raise ApiError(400, "unsafe SPJ import")
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in forbidden_calls
+            ):
                 raise ApiError(400, "unsafe SPJ operation")
-        self.store.spj_dir.mkdir(parents=True, exist_ok=True)
-        temporary = self.spj_path(problem_id).with_suffix(".py.tmp")
-        temporary.write_text(text, encoding="utf-8")
-        temporary.replace(self.spj_path(problem_id))
+            if isinstance(node, ast.Attribute) and (
+                node.attr.startswith("__") or node.attr in forbidden_attributes
+            ):
+                raise ApiError(400, "unsafe SPJ operation")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "open"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+            ):
+                raise ApiError(400, "SPJ may only open paths passed by the judge")
+
+        await asyncio.to_thread(self._write_spj, problem_id, text)
         if problem.judge_mode != "spj":
             await self._set_judge_mode(problem_id, "spj")
 
@@ -95,8 +147,14 @@ class ProblemService:
         path = self.spj_path(problem_id)
         if not path.exists():
             raise ApiError(404, "SPJ script not found")
-        path.unlink()
+        await asyncio.to_thread(path.unlink)
         await self._set_judge_mode(problem_id, "standard")
+
+    def _write_spj(self, problem_id: str, text: str) -> None:
+        self.store.spj_dir.mkdir(parents=True, exist_ok=True)
+        temporary = self.spj_path(problem_id).with_suffix(".py.tmp")
+        temporary.write_text(text, encoding="utf-8")
+        temporary.replace(self.spj_path(problem_id))
 
     async def _set_judge_mode(self, problem_id: str, mode: str) -> None:
         def update(state):

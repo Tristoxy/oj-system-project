@@ -58,6 +58,7 @@ class SubmissionService:
                 code=payload.code,
                 counts=len(problem.get("testcases", [])) * 10,
                 created_at=now.isoformat(),
+                pdg=build_pdg(payload.code, payload.language),
             )
             state["submissions"].append(submission.model_dump(mode="json"))
             recompute_user_stats(state)
@@ -127,7 +128,7 @@ class SubmissionService:
         def reset(state):
             for item in state["submissions"]:
                 if item["submission_id"] == submission_id:
-                    item.update(status="pending", details=[], score=0, pdg=None)
+                    item.update(status="pending", details=[], score=0)
                     return Submission.model_validate(item)
             raise ApiError(404, "submission not found")
 
@@ -189,7 +190,7 @@ class SubmissionService:
             language = Language.model_validate(raw_language)
             details = await self.runner.judge(submission.code, language, problem)
             score = sum(10 for detail in details if detail.result == "AC")
-            pdg = build_pdg(submission.code, submission.language)
+            pdg = submission.pdg or build_pdg(submission.code, submission.language)
 
             def finish(current):
                 for item in current["submissions"]:

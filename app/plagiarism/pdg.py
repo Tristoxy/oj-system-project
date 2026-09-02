@@ -35,6 +35,38 @@ def graph_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     return round(0.55 * node_score + 0.30 * edge_score + 0.15 * sequence_score, 4)
 
 
+def map_similar_nodes(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> list[dict[str, int]]:
+    """Greedily map normalized statements for a compact report summary."""
+    right_by_label: dict[str, list[dict[str, Any]]] = {}
+    for node in right.get("nodes", []):
+        right_by_label.setdefault(str(node.get("label", "")), []).append(node)
+
+    mapping: list[dict[str, int]] = []
+    used: set[int] = set()
+    for left_node in left.get("nodes", []):
+        candidates = right_by_label.get(str(left_node.get("label", "")), [])
+        match = next(
+            (node for node in candidates if int(node.get("id", -1)) not in used),
+            None,
+        )
+        if match is None:
+            continue
+        right_id = int(match.get("id", -1))
+        used.add(right_id)
+        mapping.append(
+            {
+                "left_node_id": int(left_node.get("id", -1)),
+                "right_node_id": right_id,
+                "left_line": int(left_node.get("line", 0)),
+                "right_line": int(match.get("line", 0)),
+            }
+        )
+    return mapping
+
+
 def _multiset_jaccard(left: Counter, right: Counter) -> float:
     union = sum((left | right).values())
     return 1.0 if union == 0 else sum((left & right).values()) / union

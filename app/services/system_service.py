@@ -9,6 +9,7 @@ from app.models.problem import Problem
 from app.models.submission import Submission
 from app.models.system import ImportBundle
 from app.models.user import User
+from app.plagiarism.pdg import build_pdg
 from app.repositories.state_store import StateStore, empty_state
 from app.services.state_helpers import recompute_user_stats
 
@@ -72,11 +73,12 @@ class SystemService:
             self._validate_import_against_state(bundle, state)
             self._merge(state["users"], [item.model_dump(mode="json") for item in bundle.users], "user_id")
             self._merge(state["problems"], [item.model_dump(mode="json") for item in bundle.problems], "id")
-            self._merge(
-                state["submissions"],
-                [item.model_dump(mode="json") for item in bundle.submissions],
-                "submission_id",
-            )
+            imported_submissions = []
+            for item in bundle.submissions:
+                raw = item.model_dump(mode="json")
+                raw["pdg"] = build_pdg(item.code, item.language)
+                imported_submissions.append(raw)
+            self._merge(state["submissions"], imported_submissions, "submission_id")
             state["sessions"] = []
             recompute_user_stats(state)
 

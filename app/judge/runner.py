@@ -5,7 +5,6 @@ import os
 import signal
 import shlex
 import shutil
-import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -128,7 +127,11 @@ class JudgeRunner:
             inner = shlex.split(
                 template.format(src=str(container_source), exe=str(container_executable))
             )
-            image = "python:3.10-slim" if language.name == "python" else "gcc:13"
+            image = (
+                os.getenv("OJ_PYTHON_IMAGE", "oj-python:3.10")
+                if language.name == "python"
+                else os.getenv("OJ_CPP_IMAGE", "oj-cpp:gcc13")
+            )
             args = [
                 "docker",
                 "run",
@@ -309,18 +312,32 @@ class JudgeRunner:
         script = self.spj_dir / f"{problem_id}.py"
         if not script.is_file():
             return "UNK"
+        local_script = directory / "spj.py"
         input_path = directory / "spj-input.txt"
         expected_path = directory / "spj-expected.txt"
         actual_path = directory / "spj-actual.txt"
-        input_path.write_text(testcase.input, encoding="utf-8")
-        expected_path.write_text(testcase.output, encoding="utf-8")
-        actual_path.write_text(actual, encoding="utf-8")
-        result = await self._execute(
-            [sys.executable, str(script), str(input_path), str(expected_path), str(actual_path)],
+        await asyncio.gather(
+            asyncio.to_thread(shutil.copyfile, script, local_script),
+            asyncio.to_thread(input_path.write_text, testcase.input, encoding="utf-8"),
+            asyncio.to_thread(expected_path.write_text, testcase.output, encoding="utf-8"),
+            asyncio.to_thread(actual_path.write_text, actual, encoding="utf-8"),
+        )
+        language = Language(
+            name="python",
+            file_ext=".py",
+            run_cmd="python3 {src} spj-input.txt spj-expected.txt spj-actual.txt",
+            time_limit=2,
+            memory_limit=64,
+        )
+        result = await self._run_command(
+            language.run_cmd,
+            local_script,
+            directory / "unused",
+            directory,
             "",
             2,
             64,
-            directory,
+            language,
         )
         return "AC" if result.result == "AC" else "WA"
 
