@@ -68,11 +68,8 @@ class SystemService:
         return {"users": users, "problems": problems, "submissions": submissions}
 
     async def import_data(self, bundle: ImportBundle) -> None:
-        for user in bundle.users:
-            if not is_password_hash(user.password):
-                raise ApiError(400, "imported passwords must be valid hashes")
-
         def merge(state):
+            self._validate_import_against_state(bundle, state)
             self._merge(state["users"], [item.model_dump(mode="json") for item in bundle.users], "user_id")
             self._merge(state["problems"], [item.model_dump(mode="json") for item in bundle.problems], "id")
             self._merge(
@@ -84,6 +81,47 @@ class SystemService:
             recompute_user_stats(state)
 
         await self.store.mutate(merge)
+
+    async def validate_import(self, bundle: ImportBundle) -> None:
+        """Validate completely before the caller pauses background workers."""
+        state = await self.store.read()
+        self._validate_import_against_state(bundle, state)
+
+    @staticmethod
+    def _validate_import_against_state(
+        bundle: ImportBundle,
+        state: dict[str, list[dict]],
+    ) -> None:
+        def require_unique(values: list[str], label: str) -> None:
+            if len(values) != len(set(values)):
+                raise ApiError(400, f"duplicate {label} in import data")
+
+        for user in bundle.users:
+            if not is_password_hash(user.password):
+                raise ApiError(400, "imported passwords must be valid hashes")
+
+        require_unique([user.user_id for user in bundle.users], "user_id")
+        require_unique([user.username for user in bundle.users], "username")
+        require_unique([problem.id for problem in bundle.problems], "problem id")
+        require_unique(
+            [submission.submission_id for submission in bundle.submissions],
+            "submission_id",
+        )
+
+        merged_users = {str(item["user_id"]): item for item in state["users"]}
+        merged_users.update(
+            {user.user_id: user.model_dump(mode="json") for user in bundle.users}
+        )
+        usernames = [str(item["username"]) for item in merged_users.values()]
+        require_unique(usernames, "username")
+
+        problem_ids = {str(item["id"]) for item in state["problems"]}
+        problem_ids.update(problem.id for problem in bundle.problems)
+        for submission in bundle.submissions:
+            if submission.user_id not in merged_users:
+                raise ApiError(400, "submission references an unknown user")
+            if submission.problem_id not in problem_ids:
+                raise ApiError(400, "submission references an unknown problem")
 
     @staticmethod
     def _merge(target: list[dict], incoming: list[dict], key: str) -> None:

@@ -23,6 +23,8 @@ class LanguageService:
 
     async def register(self, payload: LanguageCreate) -> Language:
         validate_command_template(payload.run_cmd)
+        if "{src}" not in payload.run_cmd and "{exe}" not in payload.run_cmd:
+            raise ApiError(400, "run command must contain {src} or {exe}")
         if payload.compile_cmd:
             validate_command_template(payload.compile_cmd, require_src=True)
         language = Language.model_validate(payload.model_dump())

@@ -1,8 +1,9 @@
 """Submission and per-test-case result models."""
 
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 SubmissionStatus = Literal["pending", "success", "error"]
@@ -17,21 +18,40 @@ class SubmissionCreate(BaseModel):
 
 
 class TestCaseResult(BaseModel):
-    id: int
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(ge=1)
     result: CaseResult
-    time: float
-    memory: float
+    time: float = Field(ge=0)
+    memory: float = Field(ge=0)
 
 
 class Submission(BaseModel):
-    submission_id: str
-    user_id: str
-    problem_id: str
-    language: str
-    code: str
+    model_config = ConfigDict(extra="forbid")
+
+    submission_id: str = Field(min_length=1)
+    user_id: str = Field(min_length=1)
+    problem_id: str = Field(min_length=1)
+    language: str = Field(min_length=1)
+    code: str = Field(min_length=1, max_length=200_000)
     status: SubmissionStatus = "pending"
     details: list[TestCaseResult] = Field(default_factory=list)
-    score: int = 0
-    counts: int = 0
+    score: int = Field(default=0, ge=0)
+    counts: int = Field(default=0, ge=0)
     created_at: str
     pdg: dict[str, object] | None = None
+
+    @field_validator("created_at")
+    @classmethod
+    def validate_created_at(cls, value: str) -> str:
+        datetime.fromisoformat(value)
+        return value
+
+    @model_validator(mode="after")
+    def validate_result_totals(self) -> "Submission":
+        if self.score > self.counts:
+            raise ValueError("score cannot exceed counts")
+        case_ids = [detail.id for detail in self.details]
+        if len(case_ids) != len(set(case_ids)):
+            raise ValueError("test case result ids must be unique")
+        return self

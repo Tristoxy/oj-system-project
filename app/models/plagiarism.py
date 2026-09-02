@@ -12,6 +12,8 @@ class PlagiarismRequest(BaseModel):
 
 
 class PlagiarismMatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     left_submission_id: str
     right_submission_id: str
     similarity: float
@@ -19,6 +21,8 @@ class PlagiarismMatch(BaseModel):
 
 
 class PlagiarismTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     task_id: str
     problem_id: str
     threshold: float

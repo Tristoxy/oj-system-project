@@ -53,6 +53,7 @@ async def import_data(
         bundle = ImportBundle.model_validate(raw)
     except (UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
         raise ApiError(400, "invalid import data") from exc
+    await container.system.validate_import(bundle)
     await container.cancel_background_tasks()
     await container.system.import_data(bundle)
     await container.submissions.resume_pending()

@@ -9,6 +9,8 @@ PROBLEM_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
 class TestCase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     input: str
     output: str
 

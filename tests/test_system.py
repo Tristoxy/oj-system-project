@@ -49,3 +49,52 @@ def test_import_rejects_malformed_password_hash(admin_client: TestClient) -> Non
 
     assert response.status_code == 400
     assert response.json()["code"] == 400
+
+
+def test_invalid_import_does_not_change_state_or_session(
+    admin_client: TestClient,
+) -> None:
+    bundle = admin_client.get("/api/export/").json()["data"]
+    duplicate = dict(bundle["users"][0])
+    duplicate["user_id"] = "2"
+    bundle["users"].append(duplicate)
+
+    response = admin_client.post(
+        "/api/import/",
+        files={"file": ("backup.json", json.dumps(bundle), "application/json")},
+    )
+
+    assert response.status_code == 400
+    still_logged_in = admin_client.get("/api/export/")
+    assert still_logged_in.status_code == 200
+    assert len(still_logged_in.json()["data"]["users"]) == 1
+
+
+def test_import_rejects_broken_submission_reference(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    admin_client.post("/api/problems/", json=problem_payload)
+    bundle = admin_client.get("/api/export/").json()["data"]
+    bundle["submissions"].append(
+        {
+            "submission_id": "1",
+            "user_id": "missing-user",
+            "problem_id": "sum_2",
+            "language": "python",
+            "code": "print(3)",
+            "status": "pending",
+            "details": [],
+            "score": 0,
+            "counts": 10,
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
+
+    response = admin_client.post(
+        "/api/import/",
+        files={"file": ("backup.json", json.dumps(bundle), "application/json")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == 400

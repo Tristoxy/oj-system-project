@@ -95,10 +95,14 @@ def validate_command_template(command: str, *, require_src: bool = False) -> Non
         raise ApiError(400, "language executable is not allowed")
     if require_src and "{src}" not in command:
         raise ApiError(400, "language command must contain {src}")
-    unknown = {
-        field_name
-        for _, field_name, _, _ in string.Formatter().parse(command)
-        if field_name is not None and field_name not in {"src", "exe"}
-    }
+    try:
+        fields = [
+            field_name
+            for _, field_name, _, _ in string.Formatter().parse(command)
+            if field_name is not None
+        ]
+    except ValueError as exc:
+        raise ApiError(400, "invalid language command template") from exc
+    unknown = {field_name for field_name in fields if field_name not in {"src", "exe"}}
     if unknown:
         raise ApiError(400, "language command contains unsupported placeholders")

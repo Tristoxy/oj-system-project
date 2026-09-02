@@ -96,10 +96,10 @@ class SubmissionService:
     ) -> dict[str, object]:
         if user_id is None and problem_id is None:
             raise ApiError(400, "user_id or problem_id is required")
-        if submission_status not in {None, "pending", "success", "error"}:
-            raise ApiError(400, "invalid submission status")
         if user.role != "admin" and user_id not in {None, user.user_id}:
             raise ApiError(403, "permission denied")
+        if submission_status not in {None, "pending", "success", "error"}:
+            raise ApiError(400, "invalid submission status")
         effective_user = user_id if user.role == "admin" else user.user_id
         state = await self.store.read()
         items = [Submission.model_validate(item) for item in state["submissions"]]
