@@ -13,6 +13,43 @@ def test_renamed_python_programs_are_similar() -> None:
     assert graph_similarity(first, second) >= 0.8
 
 
+def test_cfg_models_if_branches_and_reaching_definitions() -> None:
+    graph = build_pdg(
+        "if flag:\n    value = 1\nelse:\n    value = 2\nprint(value)",
+        "python",
+    )
+    lines = {node["id"]: node["line"] for node in graph["nodes"]}
+    edges = {
+        (lines[edge["from"]], lines[edge["to"]], edge["type"])
+        for edge in graph["edges"]
+    }
+
+    assert (1, 2, "flow") in edges
+    assert (1, 4, "flow") in edges
+    assert (2, 4, "flow") not in edges
+    assert (2, 5, "flow") in edges
+    assert (4, 5, "flow") in edges
+    assert (2, 5, "data") in edges
+    assert (4, 5, "data") in edges
+
+
+def test_cfg_contains_loop_back_edge() -> None:
+    graph = build_pdg(
+        "while ready:\n    ready = update()\nprint(ready)",
+        "python",
+    )
+    lines = {node["id"]: node["line"] for node in graph["nodes"]}
+    flow_edges = {
+        (lines[edge["from"]], lines[edge["to"]])
+        for edge in graph["edges"]
+        if edge["type"] == "flow"
+    }
+
+    assert (1, 2) in flow_edges
+    assert (2, 1) in flow_edges
+    assert (1, 3) in flow_edges
+
+
 def test_plagiarism_task(
     admin_client: TestClient,
     problem_payload: dict[str, object],

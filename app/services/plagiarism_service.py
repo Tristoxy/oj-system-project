@@ -115,21 +115,6 @@ class PlagiarismService:
                     )
             matches.sort(key=lambda item: item.similarity, reverse=True)
 
-            def finish(current):
-                for submission in current["submissions"]:
-                    if submission["submission_id"] in graphs:
-                        submission["pdg"] = graphs[submission["submission_id"]]
-                for item in current["plagiarism_tasks"]:
-                    if item["task_id"] == task_id:
-                        item.update(
-                            status="success",
-                            matches=[match.model_dump(mode="json") for match in matches],
-                            submission_count=len(submissions),
-                            pair_count=len(matches),
-                            clone_count=sum(match.is_clone for match in matches),
-                        )
-
-            await self.store.mutate(finish)
             report = {
                 "task_id": task_id,
                 "problem_id": task.problem_id,
@@ -150,6 +135,23 @@ class PlagiarismService:
                 encoding="utf-8",
             )
             await asyncio.to_thread(temporary.replace, path)
+
+            def finish(current):
+                for submission in current["submissions"]:
+                    if submission["submission_id"] in graphs:
+                        submission["pdg"] = graphs[submission["submission_id"]]
+                for item in current["plagiarism_tasks"]:
+                    if item["task_id"] == task_id:
+                        item.update(
+                            status="success",
+                            matches=[match.model_dump(mode="json") for match in matches],
+                            submission_count=len(submissions),
+                            pair_count=len(matches),
+                            clone_count=sum(match.is_clone for match in matches),
+                        )
+
+            # Publish success only after the downloadable report exists.
+            await self.store.mutate(finish)
         except Exception:
             def fail(state):
                 for item in state["plagiarism_tasks"]:

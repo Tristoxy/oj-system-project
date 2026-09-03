@@ -1,6 +1,7 @@
 """Lightweight AST/CFG/PDG construction and approximate graph matching."""
 
 import ast
+import copy
 import difflib
 import io
 import keyword
@@ -79,39 +80,175 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
         return _build_token_pdg(code)
 
     nodes: list[dict[str, Any]] = []
-    edges: list[dict[str, Any]] = []
-    last_definition: dict[str, int] = {}
-    previous: int | None = None
+    flow_edges: set[tuple[int, int]] = set()
+    control_edges: set[tuple[int, int]] = set()
+    definitions: dict[int, set[str]] = {}
+    uses: dict[int, set[str]] = {}
 
-    def visit_statements(statements: list[ast.stmt], controller: int | None = None) -> None:
-        nonlocal previous
+    def add_node(statement: ast.stmt) -> int:
+        node_id = len(nodes)
+        header = _statement_header(statement)
+        loads, stores = _names(header)
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            stores.add(statement.name)
+        nodes.append(
+            {
+                "id": node_id,
+                "label": _normalized_ast_label(header),
+                "line": getattr(statement, "lineno", 0),
+            }
+        )
+        definitions[node_id] = stores
+        uses[node_id] = loads
+        return node_id
+
+    def build_block(
+        statements: list[ast.stmt],
+        incoming: set[int],
+        controller: int | None = None,
+    ) -> set[int]:
+        exits = set(incoming)
         for statement in statements:
-            node_id = len(nodes)
-            label = _normalized_ast_label(statement)
-            nodes.append({"id": node_id, "label": label, "line": getattr(statement, "lineno", 0)})
-            if previous is not None:
-                edges.append({"from": previous, "to": node_id, "type": "flow"})
+            node_id = add_node(statement)
+            flow_edges.update((source, node_id) for source in exits)
             if controller is not None:
-                edges.append({"from": controller, "to": node_id, "type": "control"})
-            loads, stores = _names(statement)
-            for name in sorted(loads):
-                if name in last_definition:
-                    edges.append({"from": last_definition[name], "to": node_id, "type": "data"})
-            for name in stores:
-                last_definition[name] = node_id
-            previous = node_id
-            nested: list[list[ast.stmt]] = []
-            for attribute in ("body", "orelse", "finalbody"):
-                value = getattr(statement, attribute, None)
-                if isinstance(value, list) and value:
-                    nested.append(value)
-            handlers = getattr(statement, "handlers", [])
-            nested.extend(handler.body for handler in handlers)
-            for block in nested:
-                visit_statements(block, node_id)
+                control_edges.add((controller, node_id))
 
-    visit_statements(tree.body)
+            if isinstance(statement, ast.If):
+                body_exits = (
+                    build_block(statement.body, {node_id}, node_id)
+                    if statement.body
+                    else {node_id}
+                )
+                else_exits = (
+                    build_block(statement.orelse, {node_id}, node_id)
+                    if statement.orelse
+                    else {node_id}
+                )
+                exits = body_exits | else_exits
+            elif isinstance(statement, (ast.For, ast.AsyncFor, ast.While)):
+                body_exits = (
+                    build_block(statement.body, {node_id}, node_id)
+                    if statement.body
+                    else {node_id}
+                )
+                flow_edges.update((source, node_id) for source in body_exits)
+                exits = {node_id}
+                if statement.orelse:
+                    exits = build_block(statement.orelse, exits, node_id)
+            elif isinstance(statement, (ast.With, ast.AsyncWith)):
+                exits = build_block(statement.body, {node_id}, node_id)
+            elif isinstance(statement, ast.Try):
+                normal_exits = build_block(statement.body, {node_id}, node_id)
+                if statement.orelse:
+                    normal_exits = build_block(
+                        statement.orelse,
+                        normal_exits,
+                        node_id,
+                    )
+                branch_exits = set(normal_exits)
+                for handler in statement.handlers:
+                    branch_exits.update(
+                        build_block(handler.body, {node_id}, node_id)
+                    )
+                exits = (
+                    build_block(statement.finalbody, branch_exits, node_id)
+                    if statement.finalbody
+                    else branch_exits
+                )
+            elif isinstance(statement, ast.Match):
+                case_exits = {node_id}
+                for case in statement.cases:
+                    case_exits.update(build_block(case.body, {node_id}, node_id))
+                exits = case_exits
+            elif isinstance(
+                statement,
+                (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef),
+            ):
+                # Nested scopes belong in the analysis graph but are not
+                # executed while the definition statement itself is evaluated.
+                build_block(statement.body, {node_id}, node_id)
+                exits = {node_id}
+            elif isinstance(statement, (ast.Return, ast.Raise)):
+                exits = set()
+            else:
+                exits = {node_id}
+        return exits
+
+    build_block(tree.body, set())
+    data_edges = _reaching_definition_edges(
+        len(nodes),
+        flow_edges,
+        definitions,
+        uses,
+    )
+    edges = [
+        {"from": source, "to": target, "type": edge_type}
+        for source, target, edge_type in sorted(
+            {(source, target, "flow") for source, target in flow_edges}
+            | {(source, target, "control") for source, target in control_edges}
+            | {(source, target, "data") for source, target in data_edges}
+        )
+    ]
     return {"language": "python", "nodes": nodes, "edges": edges}
+
+
+def _reaching_definition_edges(
+    node_count: int,
+    flow_edges: set[tuple[int, int]],
+    definitions: dict[int, set[str]],
+    uses: dict[int, set[str]],
+) -> set[tuple[int, int]]:
+    """Add def-use edges using a fixed-point reaching-definitions analysis."""
+    predecessors: dict[int, set[int]] = {node_id: set() for node_id in range(node_count)}
+    for source, target in flow_edges:
+        predecessors[target].add(source)
+
+    incoming: dict[int, set[tuple[str, int]]] = {
+        node_id: set() for node_id in range(node_count)
+    }
+    outgoing: dict[int, set[tuple[str, int]]] = {
+        node_id: set() for node_id in range(node_count)
+    }
+    changed = True
+    while changed:
+        changed = False
+        for node_id in range(node_count):
+            new_incoming = set().union(
+                *(outgoing[source] for source in predecessors[node_id])
+            ) if predecessors[node_id] else set()
+            killed = definitions[node_id]
+            new_outgoing = {
+                definition
+                for definition in new_incoming
+                if definition[0] not in killed
+            }
+            new_outgoing.update((name, node_id) for name in killed)
+            if new_incoming != incoming[node_id] or new_outgoing != outgoing[node_id]:
+                incoming[node_id] = new_incoming
+                outgoing[node_id] = new_outgoing
+                changed = True
+
+    return {
+        (definition_id, node_id)
+        for node_id in range(node_count)
+        for name, definition_id in incoming[node_id]
+        if name in uses[node_id] and definition_id != node_id
+    }
+
+
+def _statement_header(node: ast.stmt) -> ast.stmt:
+    """Return a copy without nested blocks for one statement-level CFG node."""
+    header = copy.deepcopy(node)
+    for attribute in ("body", "orelse", "finalbody"):
+        value = getattr(header, attribute, None)
+        if isinstance(value, list):
+            setattr(header, attribute, [])
+    if isinstance(header, ast.Try):
+        header.handlers = []
+    if isinstance(header, ast.Match):
+        header.cases = []
+    return header
 
 
 def _normalized_ast_label(node: ast.AST) -> str:
@@ -126,7 +263,7 @@ def _normalized_ast_label(node: ast.AST) -> str:
             kind = type(item.value).__name__
             return ast.copy_location(ast.Constant(value=f"<{kind}>"), item)
 
-    normalized = Normalizer().visit(ast.fix_missing_locations(ast.parse(ast.unparse(node)))).body[0]
+    normalized = Normalizer().visit(copy.deepcopy(node))
     return ast.dump(normalized, annotate_fields=False, include_attributes=False)
 
 
