@@ -73,3 +73,15 @@ def test_user_pagination_contract(admin_client: TestClient) -> None:
     assert first["users"][0]["user_id"] != second["users"][0]["user_id"]
     assert admin_client.get("/api/users/?page=1").status_code == 400
     assert admin_client.get("/api/users/?page_size=0").status_code == 400
+
+
+def test_problem_resource_limits_are_bounded(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    problem_payload["time_limit"] = 61
+    assert admin_client.post("/api/problems/", json=problem_payload).status_code == 400
+
+    problem_payload["time_limit"] = 1
+    problem_payload["memory_limit"] = 4097
+    assert admin_client.post("/api/problems/", json=problem_payload).status_code == 400

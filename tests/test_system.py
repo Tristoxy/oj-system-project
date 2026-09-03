@@ -228,3 +228,33 @@ def test_failed_import_after_pause_still_resumes_workers(
 
     resume_submissions.assert_awaited_once()
     resume_plagiarism.assert_awaited_once()
+
+
+def test_import_rejects_naive_submission_timestamp(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    admin_client.post("/api/problems/", json=problem_payload)
+    bundle = admin_client.get("/api/export/").json()["data"]
+    bundle["submissions"].append(
+        {
+            "submission_id": "1",
+            "user_id": "1",
+            "problem_id": "sum_2",
+            "language": "python",
+            "code": "print(3)",
+            "status": "success",
+            "details": [{"id": 1, "result": "AC", "time": 0, "memory": 1}],
+            "score": 10,
+            "counts": 10,
+            "created_at": "2026-01-01T00:00:00",
+        }
+    )
+
+    response = admin_client.post(
+        "/api/import/",
+        files={"file": ("naive-time.json", json.dumps(bundle), "application/json")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == 400

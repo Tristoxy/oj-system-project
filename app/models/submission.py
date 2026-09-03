@@ -48,7 +48,9 @@ class Submission(BaseModel):
     @field_validator("created_at")
     @classmethod
     def validate_created_at(cls, value: str) -> str:
-        datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError("created_at must include a timezone")
         return value
 
     @model_validator(mode="after")
