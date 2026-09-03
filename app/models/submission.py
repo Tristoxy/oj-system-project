@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 SubmissionStatus = Literal["pending", "success", "error"]
 CaseResult = Literal["AC", "WA", "TLE", "MLE", "RE", "CE", "UNK"]
+IMPORTED_SUBMISSION_TIME = "1970-01-01T00:00:00+00:00"
 
 
 class SubmissionCreate(BaseModel):
@@ -38,7 +39,10 @@ class Submission(BaseModel):
     details: list[TestCaseResult] = Field(default_factory=list)
     score: int = Field(default=0, ge=0)
     counts: int = Field(default=0, ge=0)
-    created_at: str
+    # The course's fixed import/export schema predates this internal field.  An
+    # imported submission without a timestamp must not count towards the
+    # one-minute rate limit, so use an old, timezone-aware default.
+    created_at: str = IMPORTED_SUBMISSION_TIME
     pdg: dict[str, object] | None = None
 
     @field_validator("created_at")

@@ -41,7 +41,13 @@ class UserService:
         state = await self.store.read()
         recompute_user_stats(state)
         users = [User.model_validate(item) for item in state["users"]]
-        users.sort(key=lambda user: int(user.user_id) if user.user_id.isdigit() else user.user_id)
+        users.sort(
+            key=lambda user: (
+                (0, int(user.user_id))
+                if user.user_id.isdigit()
+                else (1, user.user_id)
+            )
+        )
         return {
             "total": len(users),
             "users": [user.public() for user in paginate(users, page, page_size)],

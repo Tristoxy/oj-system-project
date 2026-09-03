@@ -15,6 +15,7 @@ from app.models.user import User
 
 
 router = APIRouter(prefix="/api", tags=["system"])
+MAX_IMPORT_BYTES = 16 * 1024 * 1024
 
 
 @router.post("/reset/")
@@ -48,8 +49,11 @@ async def import_data(
     del admin
     if not (file.filename or "").lower().endswith(".json"):
         raise ApiError(400, "only JSON files are supported")
+    content = await file.read(MAX_IMPORT_BYTES + 1)
+    if len(content) > MAX_IMPORT_BYTES:
+        raise ApiError(400, "import file is too large")
     try:
-        raw = json.loads((await file.read()).decode("utf-8"))
+        raw = json.loads(content.decode("utf-8"))
         bundle = ImportBundle.model_validate(raw)
     except (UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
         raise ApiError(400, "invalid import data") from exc

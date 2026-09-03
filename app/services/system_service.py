@@ -63,7 +63,10 @@ class SystemService:
             Problem.model_validate(item).model_dump(mode="json") for item in state["problems"]
         ]
         submissions = [
-            Submission.model_validate(item).model_dump(mode="json", exclude={"pdg"})
+            Submission.model_validate(item).model_dump(
+                mode="json",
+                exclude={"created_at", "pdg"},
+            )
             for item in state["submissions"]
         ]
         return {"users": users, "problems": problems, "submissions": submissions}

@@ -2,7 +2,11 @@
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.api import system as system_api
+from tests.test_judge import wait_for_result
 
 
 def test_export_reset_and_import(
@@ -98,3 +102,81 @@ def test_import_rejects_broken_submission_reference(
 
     assert response.status_code == 400
     assert response.json()["code"] == 400
+
+
+def test_export_matches_official_submission_shape_and_round_trips(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    admin_client.post("/api/problems/", json=problem_payload)
+    submitted = admin_client.post(
+        "/api/submissions/",
+        json={"problem_id": "sum_2", "language": "python", "code": "print(3)"},
+    ).json()["data"]
+    wait_for_result(admin_client, submitted["submission_id"])
+
+    bundle = admin_client.get("/api/export/").json()["data"]
+    exported_submission = bundle["submissions"][0]
+    assert set(exported_submission) == {
+        "submission_id",
+        "user_id",
+        "problem_id",
+        "language",
+        "code",
+        "status",
+        "details",
+        "score",
+        "counts",
+    }
+
+    imported = admin_client.post(
+        "/api/import/",
+        files={"file": ("official-backup.json", json.dumps(bundle), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    admin_client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admintestpassword"},
+    )
+    assert admin_client.get(
+        f"/api/submissions/{submitted['submission_id']}"
+    ).json()["data"] == {"score": 10, "counts": 10}
+
+
+def test_import_size_limit_is_checked_before_json_parsing(
+    admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(system_api, "MAX_IMPORT_BYTES", 8)
+
+    response = admin_client.post(
+        "/api/import/",
+        files={"file": ("large.json", b'{"long":1}', "application/json")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["msg"] == "import file is too large"
+
+
+def test_user_listing_handles_mixed_imported_ids(admin_client: TestClient) -> None:
+    bundle = admin_client.get("/api/export/").json()["data"]
+    imported_user = dict(bundle["users"][0])
+    imported_user.update(user_id="teacher", username="teacher")
+    bundle["users"].append(imported_user)
+
+    assert admin_client.post(
+        "/api/import/",
+        files={"file": ("users.json", json.dumps(bundle), "application/json")},
+    ).status_code == 200
+    admin_client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admintestpassword"},
+    )
+
+    users = admin_client.get("/api/users/")
+    assert users.status_code == 200
+    assert [item["user_id"] for item in users.json()["data"]["users"]] == [
+        "1",
+        "teacher",
+    ]
