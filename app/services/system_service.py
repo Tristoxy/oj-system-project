@@ -71,8 +71,10 @@ class SystemService:
     async def import_data(self, bundle: ImportBundle) -> None:
         def merge(state):
             self._validate_import_against_state(bundle, state)
-            self._merge(state["users"], [item.model_dump(mode="json") for item in bundle.users], "user_id")
-            self._merge(state["problems"], [item.model_dump(mode="json") for item in bundle.problems], "id")
+            imported_users = [item.model_dump(mode="json") for item in bundle.users]
+            imported_problems = [item.model_dump(mode="json") for item in bundle.problems]
+            self._merge(state["users"], imported_users, "user_id")
+            self._merge(state["problems"], imported_problems, "id")
             imported_submissions = []
             for item in bundle.submissions:
                 raw = item.model_dump(mode="json")
