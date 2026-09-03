@@ -356,6 +356,17 @@ def test_completed_submission_is_not_changed_when_problem_is_edited(
         "counts": 10,
     }
 
+    # Explicit administrator rejudge is the only operation that refreshes the
+    # snapshot, so the original source is now judged against the edited case.
+    rejudge = admin_client.put(
+        f"/api/submissions/{original['submission_id']}/rejudge"
+    )
+    assert rejudge.status_code == 200
+    assert wait_for_result(admin_client, original["submission_id"]) == {
+        "score": 0,
+        "counts": 10,
+    }
+
 
 def test_pending_submission_uses_creation_time_judge_snapshot(
     admin_client: TestClient,
