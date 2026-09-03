@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,6 +16,9 @@ from app.models.submission import Submission
 from app.plagiarism.pdg import build_pdg, graph_similarity, map_similar_nodes
 from app.repositories.state_store import StateStore
 from app.services.state_helpers import next_numeric_id
+
+
+logger = logging.getLogger(__name__)
 
 
 class PlagiarismService:
@@ -153,6 +157,8 @@ class PlagiarismService:
             # Publish success only after the downloadable report exists.
             await self.store.mutate(finish)
         except Exception:
+            logger.exception("Plagiarism analysis failed for task %s", task_id)
+
             def fail(state):
                 for item in state["plagiarism_tasks"]:
                     if item["task_id"] == task_id:

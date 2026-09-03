@@ -1,6 +1,7 @@
 """Submission lifecycle, filtering, rejudging, and background evaluation."""
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 
 from app.core.config import SUBMISSION_RATE_LIMIT, SUBMISSION_RATE_WINDOW_SECONDS
@@ -14,6 +15,9 @@ from app.models.user import User
 from app.plagiarism.pdg import build_pdg
 from app.repositories.state_store import StateStore
 from app.services.state_helpers import next_numeric_id, recompute_user_stats
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubmissionService:
@@ -208,6 +212,8 @@ class SubmissionService:
 
             await self.store.mutate(finish)
         except Exception:
+            logger.exception("Evaluation failed for submission %s", submission_id)
+
             def fail(state):
                 for item in state["submissions"]:
                     if item["submission_id"] == submission_id:
