@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import secrets
 import signal
 import shlex
 import shutil
@@ -126,6 +127,7 @@ class JudgeRunner:
         language: Language,
     ) -> ProcessResult:
         docker = self._uses_docker(language)
+        container_name: str | None = None
         if docker:
             container_source = Path("/workspace") / source.name
             container_executable = Path("/workspace") / executable.name
@@ -137,12 +139,16 @@ class JudgeRunner:
                 if language.name == "python"
                 else os.getenv("OJ_CPP_IMAGE", "oj-cpp:gcc13")
             )
+            container_name = f"oj-{secrets.token_hex(8)}"
             args = [
                 "docker",
                 "run",
                 "--rm",
+                "--interactive",
+                f"--name={container_name}",
                 "--network=none",
                 f"--memory={memory_limit}m",
+                f"--memory-swap={memory_limit}m",
                 "--cpus=1",
                 "--pids-limit=64",
                 "--cap-drop=ALL",
@@ -166,6 +172,7 @@ class JudgeRunner:
             process_memory,
             directory,
             use_process_limit=not docker,
+            docker_container=container_name,
         )
 
     async def _execute(
@@ -177,6 +184,7 @@ class JudgeRunner:
         cwd: Path,
         *,
         use_process_limit: bool = True,
+        docker_container: str | None = None,
     ) -> ProcessResult:
         started = time.perf_counter()
         preexec_fn = self._memory_limiter(memory_limit) if use_process_limit else None
@@ -203,14 +211,25 @@ class JudgeRunner:
             )
         except asyncio.TimeoutError:
             timed_out = True
+            if docker_container is not None:
+                await self._kill_docker_container(docker_container)
             self._kill_process_tree(process)
             stdout_bytes, stderr_bytes, output_exceeded = await communicate
         except asyncio.CancelledError:
+            if docker_container is not None:
+                await asyncio.shield(self._kill_docker_container(docker_container))
             self._kill_process_tree(process)
             await asyncio.gather(communicate, monitor, return_exceptions=True)
             raise
         memory_mb, memory_exceeded = await monitor
+        if docker_container is not None and (output_exceeded or memory_exceeded):
+            await self._kill_docker_container(docker_container)
         await process.wait()
+        if use_process_limit:
+            # A program can fork, close its inherited pipes, and let its parent
+            # exit successfully.  Always clear the isolated process group so
+            # such descendants cannot outlive a local judging command.
+            self._kill_process_tree(process)
         elapsed = time.perf_counter() - started
         if memory_exceeded:
             result: CaseResult = "MLE"
@@ -339,6 +358,23 @@ class JudgeRunner:
                 process.kill()
         except (ProcessLookupError, PermissionError):
             pass
+
+    @staticmethod
+    async def _kill_docker_container(container_name: str) -> None:
+        """Best-effort removal when the attached Docker client is interrupted."""
+        try:
+            cleanup = await asyncio.create_subprocess_exec(
+                "docker",
+                "kill",
+                container_name,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(cleanup.wait(), timeout=2)
+        except (OSError, asyncio.TimeoutError):
+            if "cleanup" in locals() and cleanup.returncode is None:
+                cleanup.kill()
+                await cleanup.wait()
 
     async def _compare_output(
         self,
