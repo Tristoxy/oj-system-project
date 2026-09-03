@@ -15,6 +15,8 @@ if "http" not in st.session_state:
     st.session_state.http = requests.Session()
 if "user" not in st.session_state:
     st.session_state.user = None
+if "last_submission_id" not in st.session_state:
+    st.session_state.last_submission_id = None
 
 
 def api(method: str, path: str, **kwargs):
@@ -93,8 +95,14 @@ if problem:
     st.write(problem["output_description"])
     if problem.get("samples"):
         st.subheader("Sample")
-        st.code(problem["samples"][0]["input"], language="text")
-        st.code(problem["samples"][0]["output"], language="text")
+        for index, sample in enumerate(problem["samples"], start=1):
+            left, right = st.columns(2)
+            with left:
+                st.caption(f"Input {index}")
+                st.code(sample["input"], language="text")
+            with right:
+                st.caption(f"Output {index}")
+                st.code(sample["output"], language="text")
 
 languages = api("GET", "/api/languages/") or {"name": ["python"]}
 language = st.selectbox("Language", languages.get("name", ["python"]))
@@ -108,6 +116,7 @@ if st.button("Submit", type="primary", disabled=not code.strip()):
     )
     if result:
         submission_id = result["submission_id"]
+        st.session_state.last_submission_id = submission_id
         with st.status("Judging...", expanded=True) as status_box:
             for _ in range(100):
                 detail = api("GET", f"/api/submissions/{submission_id}")
@@ -121,3 +130,24 @@ if st.button("Submit", type="primary", disabled=not code.strip()):
                 time.sleep(0.1)
             else:
                 status_box.update(label="Still pending", state="running")
+
+st.divider()
+st.subheader("Submission history")
+history = api(
+    "GET",
+    f"/api/submissions/?user_id={st.session_state.user['user_id']}",
+)
+if history and history.get("submissions"):
+    st.dataframe(history["submissions"], use_container_width=True, hide_index=True)
+else:
+    st.caption("No submissions yet.")
+
+default_submission = st.session_state.last_submission_id or ""
+lookup_id = st.text_input("Submission ID", value=default_submission)
+if st.button("Refresh result", disabled=not lookup_id.strip()):
+    detail = api("GET", f"/api/submissions/{lookup_id.strip()}")
+    if detail:
+        if "score" in detail:
+            st.metric("Result", f"{detail['score']} / {detail['counts']}")
+        else:
+            st.info(f"Status: {detail['status']}")
