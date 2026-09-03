@@ -1,0 +1,21 @@
+image: python:3.10-slim
+
+stages:
+  - test
+
+test:
+  stage: test
+  before_script:
+    - apt-get update
+    - apt-get install --no-install-recommends -y g++
+    - python -m pip install --upgrade pip
+    - python -m pip install -r requirements-dev.txt
+  script:
+    - python -m compileall -q app tests frontend
+    - python -m pytest -q
+  cache:
+    key: pip
+    paths:
+      - .cache/pip
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
