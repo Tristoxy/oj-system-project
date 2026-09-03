@@ -59,6 +59,13 @@ async def import_data(
         raise ApiError(400, "invalid import data") from exc
     await container.system.validate_import(bundle)
     await container.cancel_background_tasks()
-    await container.system.import_data(bundle)
-    await container.submissions.resume_pending()
+    try:
+        await container.system.import_data(bundle)
+    finally:
+        # A failed second-stage import must not strand work that was paused
+        # after validation.  Successful imports may also retain pending
+        # plagiarism tasks because the fixed course bundle does not replace
+        # that advanced-feature collection.
+        await container.submissions.resume_pending()
+        await container.plagiarism.resume_pending()
     return success_response(None, msg="import success")

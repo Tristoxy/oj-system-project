@@ -1,6 +1,7 @@
 """Persistence, export/import, and reset tests."""
 
 import json
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -180,3 +181,50 @@ def test_user_listing_handles_mixed_imported_ids(admin_client: TestClient) -> No
         "1",
         "teacher",
     ]
+
+
+def test_import_resumes_all_background_workers(
+    admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = admin_client.get("/api/export/").json()["data"]
+    container = admin_client.app.state.container
+    resume_submissions = AsyncMock()
+    resume_plagiarism = AsyncMock()
+    monkeypatch.setattr(container.submissions, "resume_pending", resume_submissions)
+    monkeypatch.setattr(container.plagiarism, "resume_pending", resume_plagiarism)
+
+    response = admin_client.post(
+        "/api/import/",
+        files={"file": ("backup.json", json.dumps(bundle), "application/json")},
+    )
+
+    assert response.status_code == 200
+    resume_submissions.assert_awaited_once()
+    resume_plagiarism.assert_awaited_once()
+
+
+def test_failed_import_after_pause_still_resumes_workers(
+    admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = admin_client.get("/api/export/").json()["data"]
+    container = admin_client.app.state.container
+    resume_submissions = AsyncMock()
+    resume_plagiarism = AsyncMock()
+    monkeypatch.setattr(container.submissions, "resume_pending", resume_submissions)
+    monkeypatch.setattr(container.plagiarism, "resume_pending", resume_plagiarism)
+    monkeypatch.setattr(
+        container.system,
+        "import_data",
+        AsyncMock(side_effect=RuntimeError("simulated storage failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="simulated storage failure"):
+        admin_client.post(
+            "/api/import/",
+            files={"file": ("backup.json", json.dumps(bundle), "application/json")},
+        )
+
+    resume_submissions.assert_awaited_once()
+    resume_plagiarism.assert_awaited_once()
