@@ -33,8 +33,11 @@ API 参数、导入文件、用户代码和动态语言命令均视为不可信�
 
 ```text
 --rm
+--interactive
+--name=<random name>
 --network=none
---memory=<problem limit>
+--memory=<effective limit>
+--memory-swap=<effective limit>
 --cpus=1
 --pids-limit=64
 --cap-drop=ALL
@@ -45,7 +48,8 @@ API 参数、导入文件、用户代码和动态语言命令均视为不可信�
 ```
 
 只把单次任务临时目录挂载到 `/workspace`。不会把 Docker socket 挂入 API 容器，因为该
-socket 等价于宿主 root 权限。
+socket 等价于宿主 root 权限。超时、输出洪泛、任务取消或监控异常会根据随机容器名执行
+额外清理，避免只杀死 Docker 客户端后容器仍在后台运行。
 
 ## 已知边界
 

@@ -5,7 +5,7 @@ Special Judge、Streamlit 前端、Docker 沙箱和基于程序依赖图（PDG�
 
 ## 功能
 
-- 题目：创建、列表、详情、删除、日志可见性。
+- 题目：创建、列表、详情、登录用户修改、管理员删除、日志可见性。
 - 评测：Python/C++、动态语言、后台任务、AC/WA/RE/CE/TLE/MLE/UNK、重判。
 - 用户：注册、Cookie Session、登录/登出、三种角色、用户统计、分页。
 - 日志：逐测例结果、权限裁剪、访问审计。
@@ -85,7 +85,7 @@ streamlit run frontend/app.py
 | GET | `/api/users/` | 管理员 | 分页查询用户 |
 | PUT | `/api/users/{user_id}/role` | 管理员 | 修改角色 |
 | GET/POST | `/api/problems/` | 登录 | 列表/创建题目 |
-| GET | `/api/problems/{problem_id}` | 登录 | 题目详情 |
+| GET/PUT | `/api/problems/{problem_id}` | 登录 | 详情（含测例）/局部修改题目 |
 | DELETE | `/api/problems/{problem_id}` | 管理员 | 删除题目 |
 | PUT | `/api/problems/{problem_id}/log_visibility` | 管理员 | 日志可见性 |
 | GET/POST | `/api/languages/` | 登录 | 查询/注册语言 |
@@ -104,6 +104,11 @@ streamlit run frontend/app.py
 
 ## 评测模式
 
+题目和语言的 `time_limit`、`memory_limit` 均可不配置。评测时两个字段分别按“题目配置 →
+语言配置 → 系统默认值”解析，系统默认值为 3 秒和 128 MB；未配置的题目字段在存储和详情
+响应中保持 `null`，不会在建题时提前写死。提交创建时会冻结当时的题目和语言配置，因此之后
+修改题目不会隐式重评或改变已经排队的提交；管理员主动 rejudge 时才使用最新配置。
+
 默认使用本地子进程，适合开发和基础功能验收：
 
 ```bash
@@ -119,7 +124,8 @@ OJ_JUDGE_BACKEND=docker uvicorn app.main:app
 ```
 
 Docker 评测禁用网络，设置内存、CPU、PID、只读根文件系统、`no-new-privileges`，并移除
-Linux capabilities。Python/C++ 镜像可用以下变量替换：
+Linux capabilities。容器使用交互 stdin 接收测试输入；异常结束时通过唯一容器名主动清理，
+并把 memory-swap 限制为与内存相同。Python/C++ 镜像可用以下变量替换：
 
 - `OJ_PYTHON_IMAGE`，默认 `oj-python:3.10`
 - `OJ_CPP_IMAGE`，默认 `oj-cpp:gcc13`
@@ -144,7 +150,8 @@ PBKDF2-SHA256 哈希，不导出明文。导入会：
 1. 完整校验 JSON、字段、哈希、重复 ID/用户名和提交引用；
 2. 以 ID 为键合并，冲突时导入数据覆盖原数据；
 3. 在一次原子写入中提交，失败不改变原状态；
-4. 清除 Session，并恢复导入的 pending 任务。
+4. 兼容课程固定格式中不含内部 `created_at`/PDG 字段的 submission；
+5. 清除 Session，并恢复提交与查重的 pending 任务。
 
 ## 测试与 CI
 
@@ -155,10 +162,11 @@ python -m pytest -q
 
 测试使用临时数据目录，不污染 `data/`。`.gitlab-ci.yml` 会在 Python 3.10 Linux 环境安装
 G++ 并运行相同检查。Docker 实际集成测试需要本机 Docker daemon；无 daemon 的常规 CI
-仍会检查完整的安全命令构造。
+仍会检查完整的安全命令构造。当前版本共有 `62` 项自动测试。
 
 更多内容：
 
 - [安全设计](docs/SECURITY.md)
 - [课程要求对照](docs/REQUIREMENTS_CHECKLIST.md)
 - [实验报告草稿](docs/COURSE_REPORT.md)
+- [验收与答辩指南](docs/DEFENSE_GUIDE.md)
