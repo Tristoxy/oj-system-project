@@ -129,6 +129,7 @@ class SubmissionService:
             for item in state["submissions"]:
                 if item["submission_id"] == submission_id:
                     item.update(status="pending", details=[], score=0)
+                    recompute_user_stats(state)
                     return Submission.model_validate(item)
             raise ApiError(404, "submission not found")
 

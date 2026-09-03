@@ -1,7 +1,9 @@
 """End-to-end tests for Python/C++ judging and submission queries."""
 
+import asyncio
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -218,3 +220,32 @@ def test_excessive_output_is_stopped(admin_client: TestClient) -> None:
     wait_for_result(admin_client, submission_id)
     log = admin_client.get(f"/api/submissions/{submission_id}/log").json()["data"]
     assert log["details"][0]["result"] == "UNK"
+
+
+def test_rejudge_updates_user_statistics_while_pending(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    add_problem(admin_client, problem_payload)
+    response = admin_client.post(
+        "/api/submissions/",
+        json={"problem_id": "sum_2", "language": "python", "code": "print(3)"},
+    )
+    submission_id = response.json()["data"]["submission_id"]
+    wait_for_result(admin_client, submission_id)
+    assert admin_client.get("/api/users/1").json()["data"]["resolve_count"] == 1
+
+    runner = admin_client.app.state.container.runner
+    original_judge = runner.judge
+
+    async def delayed_judge(*args, **kwargs):
+        await asyncio.sleep(0.2)
+        return await original_judge(*args, **kwargs)
+
+    monkeypatch.setattr(runner, "judge", delayed_judge)
+    assert admin_client.put(f"/api/submissions/{submission_id}/rejudge").status_code == 200
+
+    pending_user = admin_client.get("/api/users/1").json()["data"]
+    assert pending_user["resolve_count"] == 0
+    assert wait_for_result(admin_client, submission_id) == {"score": 10, "counts": 10}
