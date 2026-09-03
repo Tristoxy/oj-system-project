@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from app.container import AppContainer
 from app.core.responses import success_response
 from app.dependencies import get_container, get_current_user, require_admin
-from app.models.problem import PROBLEM_ID_PATTERN, ProblemCreate
+from app.models.problem import PROBLEM_ID_PATTERN, ProblemCreate, ProblemUpdate
 from app.models.user import User
 
 
@@ -50,6 +50,18 @@ async def get_problem(
     del current_user
     problem = await container.problems.get_problem(problem_id)
     return success_response(problem.model_dump(mode="json"))
+
+
+@router.put("/{problem_id}")
+async def update_problem(
+    problem_id: Annotated[str, Path(min_length=1, pattern=PROBLEM_ID_PATTERN)],
+    payload: ProblemUpdate,
+    current_user: User = Depends(get_current_user),
+    container: AppContainer = Depends(get_container),
+) -> dict[str, object]:
+    del current_user
+    problem = await container.problems.update_problem(problem_id, payload)
+    return success_response({"id": problem.id}, msg="update success")
 
 
 @router.delete("/{problem_id}")

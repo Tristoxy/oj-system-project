@@ -2,9 +2,15 @@
 
 import asyncio
 import time
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
+
+from app.core.config import DEFAULT_MEMORY_LIMIT, DEFAULT_TIME_LIMIT
+from app.judge.runner import JudgeRunner
+from app.models.language import Language
+from app.models.problem import Problem
 
 
 def wait_for_result(client: TestClient, submission_id: str, timeout: float = 10) -> dict:
@@ -315,3 +321,100 @@ def test_dynamically_registered_language_executes(
         "score": 10,
         "counts": 10,
     }
+
+
+def test_completed_submission_is_not_changed_when_problem_is_edited(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    add_problem(admin_client, problem_payload)
+    original = admin_client.post(
+        "/api/submissions/",
+        json={"problem_id": "sum_2", "language": "python", "code": "print(3)"},
+    ).json()["data"]
+    assert wait_for_result(admin_client, original["submission_id"]) == {
+        "score": 10,
+        "counts": 10,
+    }
+
+    assert admin_client.put(
+        "/api/problems/sum_2",
+        json={"testcases": [{"input": "", "output": "4"}]},
+    ).status_code == 200
+
+    # Editing has no implicit rejudge side effect.  A later submission uses the
+    # new cases, while the already completed record remains exactly as judged.
+    assert admin_client.get(
+        f"/api/submissions/{original['submission_id']}"
+    ).json()["data"] == {"score": 10, "counts": 10}
+    later = admin_client.post(
+        "/api/submissions/",
+        json={"problem_id": "sum_2", "language": "python", "code": "print(3)"},
+    ).json()["data"]
+    assert wait_for_result(admin_client, later["submission_id"]) == {
+        "score": 0,
+        "counts": 10,
+    }
+
+
+def test_pending_submission_uses_creation_time_judge_snapshot(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    add_problem(admin_client, problem_payload)
+    service = admin_client.app.state.container.submissions
+    paused_schedule = AsyncMock()
+    monkeypatch.setattr(service, "_schedule", paused_schedule)
+
+    queued = admin_client.post(
+        "/api/submissions/",
+        json={"problem_id": "sum_2", "language": "python", "code": "print(3)"},
+    ).json()["data"]
+    paused_schedule.assert_awaited_once_with(queued["submission_id"])
+    assert admin_client.put(
+        "/api/problems/sum_2",
+        json={"testcases": [{"input": "", "output": "4"}]},
+    ).status_code == 200
+
+    # Execute the deliberately paused task on the app's own event loop.  It
+    # must still use the configuration captured when the submission was made.
+    admin_client.portal.call(service._evaluate, queued["submission_id"])
+    assert admin_client.get(
+        f"/api/submissions/{queued['submission_id']}"
+    ).json()["data"] == {"score": 10, "counts": 10}
+
+
+@pytest.mark.parametrize(
+    ("problem_time", "problem_memory", "language_time", "language_memory", "expected"),
+    [
+        (1.5, 256, 2.5, 512, (1.5, 256)),
+        (None, None, 2.5, 512, (2.5, 512)),
+        (None, None, None, None, (DEFAULT_TIME_LIMIT, DEFAULT_MEMORY_LIMIT)),
+        (1.5, None, None, 512, (1.5, 512)),
+    ],
+)
+def test_resource_limit_priority_is_resolved_per_field(
+    problem_payload: dict[str, object],
+    problem_time: float | None,
+    problem_memory: int | None,
+    language_time: float | None,
+    language_memory: int | None,
+    expected: tuple[float, int],
+) -> None:
+    problem = Problem.model_validate(
+        {
+            **problem_payload,
+            "time_limit": problem_time,
+            "memory_limit": problem_memory,
+        }
+    )
+    language = Language(
+        name="test_python",
+        file_ext=".py",
+        run_cmd="python3 {src}",
+        time_limit=language_time,
+        memory_limit=language_memory,
+    )
+
+    assert JudgeRunner._resolve_limits(problem, language) == expected

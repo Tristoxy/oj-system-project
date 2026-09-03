@@ -65,7 +65,7 @@ class SystemService:
         submissions = [
             Submission.model_validate(item).model_dump(
                 mode="json",
-                exclude={"created_at", "pdg"},
+                exclude={"created_at", "pdg", "judge_snapshot"},
             )
             for item in state["submissions"]
         ]

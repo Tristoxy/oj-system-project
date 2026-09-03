@@ -10,7 +10,7 @@ from app.core.pagination import paginate
 from app.judge.runner import JudgeRunner
 from app.models.language import Language
 from app.models.problem import Problem
-from app.models.submission import Submission, SubmissionCreate
+from app.models.submission import JudgeSnapshot, Submission, SubmissionCreate
 from app.models.user import User
 from app.plagiarism.pdg import build_pdg
 from app.repositories.state_store import StateStore
@@ -63,6 +63,10 @@ class SubmissionService:
                 counts=len(problem.get("testcases", [])) * 10,
                 created_at=now.isoformat(),
                 pdg=build_pdg(payload.code, payload.language),
+                judge_snapshot=JudgeSnapshot(
+                    problem=Problem.model_validate(problem),
+                    language=Language.model_validate(language),
+                ),
             )
             state["submissions"].append(submission.model_dump(mode="json"))
             recompute_user_stats(state)
@@ -132,7 +136,36 @@ class SubmissionService:
         def reset(state):
             for item in state["submissions"]:
                 if item["submission_id"] == submission_id:
-                    item.update(status="pending", details=[], score=0)
+                    problem = next(
+                        (
+                            problem
+                            for problem in state["problems"]
+                            if problem["id"] == item["problem_id"]
+                        ),
+                        None,
+                    )
+                    language = next(
+                        (
+                            language
+                            for language in state["languages"]
+                            if language["name"] == item["language"]
+                        ),
+                        None,
+                    )
+                    if problem is None:
+                        raise ApiError(404, "problem not found")
+                    if language is None:
+                        raise ApiError(404, "language not found")
+                    item.update(
+                        status="pending",
+                        details=[],
+                        score=0,
+                        counts=len(problem.get("testcases", [])) * 10,
+                        judge_snapshot=JudgeSnapshot(
+                            problem=Problem.model_validate(problem),
+                            language=Language.model_validate(language),
+                        ).model_dump(mode="json"),
+                    )
                     recompute_user_stats(state)
                     return Submission.model_validate(item)
             raise ApiError(404, "submission not found")
@@ -184,15 +217,23 @@ class SubmissionService:
             raw_submission = next(
                 item for item in state["submissions"] if item["submission_id"] == submission_id
             )
-            raw_problem = next(
-                item for item in state["problems"] if item["id"] == raw_submission["problem_id"]
-            )
-            raw_language = next(
-                item for item in state["languages"] if item["name"] == raw_submission["language"]
-            )
             submission = Submission.model_validate(raw_submission)
-            problem = Problem.model_validate(raw_problem)
-            language = Language.model_validate(raw_language)
+            if submission.judge_snapshot is not None:
+                problem = submission.judge_snapshot.problem
+                language = submission.judge_snapshot.language
+            else:
+                raw_problem = next(
+                    item
+                    for item in state["problems"]
+                    if item["id"] == raw_submission["problem_id"]
+                )
+                raw_language = next(
+                    item
+                    for item in state["languages"]
+                    if item["name"] == raw_submission["language"]
+                )
+                problem = Problem.model_validate(raw_problem)
+                language = Language.model_validate(raw_language)
             details = await self.runner.judge(submission.code, language, problem)
             score = sum(10 for detail in details if detail.result == "AC")
             pdg = submission.pdg or build_pdg(submission.code, submission.language)

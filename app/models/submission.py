@@ -5,6 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.models.language import Language
+from app.models.problem import Problem
+
 
 SubmissionStatus = Literal["pending", "success", "error"]
 CaseResult = Literal["AC", "WA", "TLE", "MLE", "RE", "CE", "UNK"]
@@ -27,6 +30,13 @@ class TestCaseResult(BaseModel):
     memory: float = Field(ge=0)
 
 
+class JudgeSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    problem: Problem
+    language: Language
+
+
 class Submission(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -44,6 +54,7 @@ class Submission(BaseModel):
     # one-minute rate limit, so use an old, timezone-aware default.
     created_at: str = IMPORTED_SUBMISSION_TIME
     pdg: dict[str, object] | None = None
+    judge_snapshot: JudgeSnapshot | None = None
 
     @field_validator("created_at")
     @classmethod

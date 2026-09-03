@@ -34,6 +34,20 @@ def test_non_admin_permission_matrix(
             "run_cmd": "python3 {src}",
         },
     ).status_code == 200
+
+    # Course-staff clarification: every logged-in user may edit a problem, and
+    # problem details shown to an ordinary user include the complete testcases.
+    updated_cases = [{"input": "2 5", "output": "7"}]
+    update = client.put(
+        "/api/problems/sum_2",
+        json={"title": "Updated by Alice", "testcases": updated_cases},
+    )
+    assert update.status_code == 200
+    detail = client.get("/api/problems/sum_2")
+    assert detail.status_code == 200
+    assert detail.json()["data"]["title"] == "Updated by Alice"
+    assert detail.json()["data"]["testcases"] == updated_cases
+
     protected = (
         client.delete("/api/problems/sum_2"),
         client.put("/api/problems/sum_2/log_visibility", json={}),
@@ -45,6 +59,21 @@ def test_non_admin_permission_matrix(
     )
     assert all(response.status_code == 403 for response in protected)
     assert client.get(f"/api/users/{bobby['user_id']}").status_code == 403
+
+
+def test_problem_update_cannot_change_identity_or_admin_settings(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    assert admin_client.post("/api/problems/", json=problem_payload).status_code == 200
+
+    assert admin_client.put(
+        "/api/problems/sum_2", json={"id": "different", "title": "Changed"}
+    ).status_code == 400
+    assert admin_client.put(
+        "/api/problems/sum_2", json={"public_cases": True}
+    ).status_code == 400
+    assert admin_client.put("/api/problems/sum_2", json={}).status_code == 400
 
 
 def test_error_responses_always_match_http_status(client: TestClient) -> None:

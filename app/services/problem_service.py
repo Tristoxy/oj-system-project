@@ -4,8 +4,10 @@ import asyncio
 import ast
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from app.core.exceptions import ApiError
-from app.models.problem import Problem, ProblemCreate
+from app.models.problem import Problem, ProblemCreate, ProblemUpdate
 from app.repositories.state_store import StateStore
 
 
@@ -48,6 +50,27 @@ class ProblemService:
         spj_file = self.spj_path(problem_id)
         if spj_file.exists():
             spj_file.unlink()
+
+    async def update_problem(self, problem_id: str, payload: ProblemUpdate) -> Problem:
+        changes = payload.model_dump(exclude_unset=True)
+        requested_id = changes.pop("id", None)
+        if requested_id is not None and requested_id != problem_id:
+            raise ApiError(400, "problem id cannot be changed")
+
+        def update(state):
+            for index, raw in enumerate(state["problems"]):
+                if raw["id"] != problem_id:
+                    continue
+                merged = {**raw, **changes}
+                try:
+                    problem = Problem.model_validate(merged)
+                except ValidationError as exc:
+                    raise ApiError(400, "invalid problem update") from exc
+                state["problems"][index] = problem.model_dump(mode="json")
+                return problem
+            raise ApiError(404, "problem not found")
+
+        return await self.store.mutate(update)
 
     async def set_log_visibility(self, problem_id: str, public_cases: bool) -> Problem:
         def update(state):

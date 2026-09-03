@@ -24,8 +24,10 @@ def test_problem_management_flow(
     assert detail["id"] == "sum_2"
     assert detail["hint"] == ""
     assert detail["tags"] == []
-    assert detail["time_limit"] == 3.0
-    assert detail["memory_limit"] == 128
+    # An omitted problem limit stays unset.  The judge resolves it from the
+    # selected language and finally from the system defaults at evaluation time.
+    assert detail["time_limit"] is None
+    assert detail["memory_limit"] is None
 
     delete_response = admin_client.delete("/api/problems/sum_2")
     assert delete_response.status_code == 200

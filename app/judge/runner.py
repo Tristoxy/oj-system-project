@@ -18,6 +18,7 @@ try:
 except ImportError:  # pragma: no cover - resource is unavailable on Windows
     resource = None
 
+from app.core.config import DEFAULT_MEMORY_LIMIT, DEFAULT_TIME_LIMIT
 from app.models.language import Language
 from app.models.problem import Problem, TestCase
 from app.models.submission import CaseResult, TestCaseResult
@@ -53,6 +54,8 @@ class JudgeRunner:
             if self._uses_docker(language):
                 os.chmod(directory, 0o777)
 
+            time_limit, memory_limit = self._resolve_limits(problem, language)
+
             if language.compile_cmd:
                 compile_result = await self._run_command(
                     language.compile_cmd,
@@ -60,8 +63,8 @@ class JudgeRunner:
                     executable,
                     directory,
                     "",
-                    min(max(problem.time_limit * 5, 5), 30),
-                    max(problem.memory_limit, language.memory_limit),
+                    min(max(time_limit * 5, 5), 30),
+                    memory_limit,
                     language,
                 )
                 if compile_result.result != "AC":
@@ -86,8 +89,8 @@ class JudgeRunner:
                     executable,
                     directory,
                     testcase.input,
-                    problem.time_limit,
-                    problem.memory_limit,
+                    time_limit,
+                    memory_limit,
                     language,
                 )
                 result = run_result.result
@@ -107,6 +110,22 @@ class JudgeRunner:
                     )
                 )
             return results
+
+    @staticmethod
+    def _resolve_limits(problem: Problem, language: Language) -> tuple[float, int]:
+        """Resolve problem, language, then system defaults as clarified by course staff."""
+        time_limit = problem.time_limit
+        if time_limit is None:
+            time_limit = language.time_limit
+        if time_limit is None:
+            time_limit = DEFAULT_TIME_LIMIT
+
+        memory_limit = problem.memory_limit
+        if memory_limit is None:
+            memory_limit = language.memory_limit
+        if memory_limit is None:
+            memory_limit = DEFAULT_MEMORY_LIMIT
+        return time_limit, memory_limit
 
     def _uses_docker(self, language: Language) -> bool:
         if self.backend == "local":
