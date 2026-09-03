@@ -249,3 +249,69 @@ def test_rejudge_updates_user_statistics_while_pending(
     pending_user = admin_client.get("/api/users/1").json()["data"]
     assert pending_user["resolve_count"] == 0
     assert wait_for_result(admin_client, submission_id) == {"score": 10, "counts": 10}
+
+
+def test_standard_and_strict_output_modes(admin_client: TestClient) -> None:
+    base = {
+        "title": "Output comparison",
+        "description": "Compare output.",
+        "input_description": "",
+        "output_description": "",
+        "samples": [],
+        "constraints": "",
+        "testcases": [{"input": "", "output": "3"}],
+    }
+    add_problem(admin_client, {**base, "id": "standard"})
+    add_problem(admin_client, {**base, "id": "strict", "judge_mode": "strict"})
+
+    standard = admin_client.post(
+        "/api/submissions/",
+        json={"problem_id": "standard", "language": "python", "code": "print('3   ')"},
+    ).json()["data"]
+    strict = admin_client.post(
+        "/api/submissions/",
+        json={"problem_id": "strict", "language": "python", "code": "print(3)"},
+    ).json()["data"]
+
+    assert wait_for_result(admin_client, standard["submission_id"])["score"] == 10
+    assert wait_for_result(admin_client, strict["submission_id"])["score"] == 0
+    strict_log = admin_client.get(
+        f"/api/submissions/{strict['submission_id']}/log"
+    ).json()["data"]
+    assert strict_log["details"][0]["result"] == "WA"
+
+
+def test_dynamically_registered_language_executes(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    add_problem(admin_client, problem_payload)
+    registered = admin_client.post(
+        "/api/languages/",
+        json={
+            "name": "python_copy",
+            "file_ext": "py",
+            "run_cmd": "python3 {src}",
+            "time_limit": 1,
+            "memory_limit": 128,
+        },
+    )
+    assert registered.json() == {
+        "code": 200,
+        "msg": "language registered",
+        "data": {"name": "python_copy"},
+    }
+    assert "python_copy" in admin_client.get("/api/languages/").json()["data"]["name"]
+
+    submission = admin_client.post(
+        "/api/submissions/",
+        json={
+            "problem_id": "sum_2",
+            "language": "python_copy",
+            "code": "a, b = map(int, input().split())\nprint(a + b)",
+        },
+    ).json()["data"]
+    assert wait_for_result(admin_client, submission["submission_id"]) == {
+        "score": 10,
+        "counts": 10,
+    }
