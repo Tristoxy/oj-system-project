@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 PROBLEM_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
@@ -36,6 +36,12 @@ class ProblemCreate(BaseModel):
     public_cases: bool = False
     judge_mode: Literal["standard", "strict", "spj"] = "standard"
 
+    # 新版前端使用整数题号；存储时规范化为字符串以兼容课程 API 的路径参数和旧数据。
+    @field_validator("id", mode="before")
+    @classmethod
+    def normalize_numeric_id(cls, value: object) -> object:
+        return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
+
 
 class Problem(ProblemCreate):
     """Stored problem model; currently identical to the creation payload."""
@@ -61,6 +67,11 @@ class ProblemUpdate(BaseModel):
     memory_limit: int | None = Field(default=None, gt=0, le=4096)
     author: str | None = None
     difficulty: str | None = None
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def normalize_numeric_id(cls, value: object) -> object:
+        return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
 
     # 函数 `require_edit`：负责当前模块中的对应操作。
     @model_validator(mode="after")

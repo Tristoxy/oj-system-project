@@ -169,18 +169,29 @@ class JudgeRunner:
     ) -> ProcessResult:
         started = time.perf_counter()
         preexec_fn = self._memory_limiter(memory_limit)
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *args,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-                start_new_session=True,
-                preexec_fn=preexec_fn,
-            )
-        except (OSError, ValueError) as exc:
-            return ProcessResult("UNK", stderr=str(exc))
+        process = None
+        for attempt in range(5):
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *args,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=cwd,
+                    start_new_session=True,
+                    preexec_fn=preexec_fn,
+                )
+                break
+            except OSError as exc:
+                # Windows 应用控制可能在扫描新编译的 exe 时短暂返回 4551；稍后重试即可。
+                if os.name == "nt" and exc.winerror == 4551 and attempt < 4:
+                    await asyncio.sleep(0.1 * (attempt + 1))
+                    continue
+                return ProcessResult("UNK", stderr=str(exc))
+            except ValueError as exc:
+                return ProcessResult("UNK", stderr=str(exc))
+        if process is None:  # pragma: no cover - 循环只会成功或提前返回
+            return ProcessResult("UNK", stderr="failed to start judge process")
 
         monitor = asyncio.create_task(self._monitor_memory(process, memory_limit))
         communicate = asyncio.create_task(self._communicate_limited(process, stdin))

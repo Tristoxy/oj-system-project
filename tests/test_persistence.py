@@ -12,7 +12,7 @@ from app.main import create_app
 def admin_login(client: TestClient) -> None:
     response = client.post(
         "/api/auth/login",
-        json={"username": "admin", "password": "admintestpassword"},
+        json={"username": "Tristoxy", "password": "Qtc521521"},
     )
     assert response.status_code == 200
 
@@ -30,7 +30,12 @@ def test_problem_and_password_survive_restart(
     with TestClient(create_app(data_dir)) as second:
         admin_login(second)
         problems = second.get("/api/problems/").json()["data"]
-        assert problems == [{"id": "sum_2", "title": "Two Sum"}]
+        assert problems == [
+            {"id": "1001", "title": "两数之和"},
+            {"id": "1002", "title": "两数之差"},
+            {"id": "1003", "title": "两数之积"},
+            {"id": "sum_2", "title": "Two Sum"},
+        ]
 
 
 # 函数 `test_pending_submission_resumes_after_restart`：负责当前测试或测试夹具。

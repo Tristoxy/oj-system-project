@@ -11,7 +11,7 @@ from app.models.system import ImportBundle
 from app.models.user import User
 from app.plagiarism.pdg import build_pdg
 from app.repositories.state_store import StateStore, empty_state
-from app.services.state_helpers import recompute_user_stats
+from app.services.state_helpers import next_numeric_id, recompute_user_stats
 
 
 DEFAULT_LANGUAGES = [
@@ -32,6 +32,72 @@ DEFAULT_LANGUAGES = [
     ),
 ]
 
+DEFAULT_PROBLEMS = [
+    Problem(
+        id="1001",
+        title="两数之和",
+        description="给定两个整数，输出它们的和。",
+        input_description="输入一行两个整数 a 和 b。",
+        output_description="输出 a+b。",
+        samples=[{"input": "1 2\n", "output": "3\n"}],
+        constraints="-10^9 <= a,b <= 10^9",
+        testcases=[
+            {"input": "1 2\n", "output": "3\n"},
+            {"input": "-5 8\n", "output": "3\n"},
+            {"input": "1000000000 1000000000\n", "output": "2000000000\n"},
+        ],
+        hint="读取两个整数后相加。",
+        source="课程演示",
+        tags=["基础", "算术"],
+        time_limit=3.0,
+        memory_limit=128,
+        author="Tristoxy",
+        difficulty="入门",
+    ),
+    Problem(
+        id="1002",
+        title="两数之差",
+        description="给定两个整数，输出第一个整数减去第二个整数的结果。",
+        input_description="输入一行两个整数 a 和 b。",
+        output_description="输出 a-b。",
+        samples=[{"input": "5 2\n", "output": "3\n"}],
+        constraints="-10^9 <= a,b <= 10^9",
+        testcases=[
+            {"input": "5 2\n", "output": "3\n"},
+            {"input": "-5 8\n", "output": "-13\n"},
+            {"input": "1000000000 -1000000000\n", "output": "2000000000\n"},
+        ],
+        hint="注意运算顺序是 a-b。",
+        source="课程演示",
+        tags=["基础", "算术"],
+        time_limit=3.0,
+        memory_limit=128,
+        author="Tristoxy",
+        difficulty="入门",
+    ),
+    Problem(
+        id="1003",
+        title="两数之积",
+        description="给定两个整数，输出它们的乘积。",
+        input_description="输入一行两个整数 a 和 b。",
+        output_description="输出 a*b。",
+        samples=[{"input": "3 4\n", "output": "12\n"}],
+        constraints="-10^9 <= a,b <= 10^9",
+        testcases=[
+            {"input": "3 4\n", "output": "12\n"},
+            {"input": "-5 8\n", "output": "-40\n"},
+            {"input": "100000 100000\n", "output": "10000000000\n"},
+        ],
+        hint="Python 整数可以直接处理这里的乘法范围。",
+        source="课程演示",
+        tags=["基础", "算术"],
+        time_limit=3.0,
+        memory_limit=128,
+        author="Tristoxy",
+        difficulty="入门",
+    ),
+]
+
 
 class SystemService:
     # 函数 `__init__`：负责当前模块中的对应操作。
@@ -44,12 +110,31 @@ class SystemService:
 
         # 函数 `add_defaults`：负责当前模块中的对应操作。
         def add_defaults(state):
-            if not any(user.get("username") == "admin" for user in state["users"]):
-                state["users"].append(self._initial_admin().model_dump(mode="json"))
+            if not any(user.get("username") == "Tristoxy" for user in state["users"]):
+                legacy_admin = next(
+                    (
+                        user
+                        for user in state["users"]
+                        if user.get("username") == "admin" and user.get("role") == "admin"
+                    ),
+                    None,
+                )
+                if legacy_admin is not None:
+                    legacy_admin["username"] = "Tristoxy"
+                    legacy_admin["password"] = hash_password("Qtc521521")
+                else:
+                    initial_admin = self._initial_admin()
+                    if any(user.get("user_id") == "1" for user in state["users"]):
+                        initial_admin.user_id = next_numeric_id(state["users"], "user_id")
+                    state["users"].append(initial_admin.model_dump(mode="json"))
             known = {language.get("name") for language in state["languages"]}
             for language in DEFAULT_LANGUAGES:
                 if language.name not in known:
                     state["languages"].append(language.model_dump(mode="json"))
+            known_problem_ids = {problem.get("id") for problem in state["problems"]}
+            for problem in DEFAULT_PROBLEMS:
+                if problem.id not in known_problem_ids:
+                    state["problems"].append(problem.model_dump(mode="json"))
 
         await self.store.mutate(add_defaults)
 
@@ -162,8 +247,8 @@ class SystemService:
     def _initial_admin() -> User:
         return User(
             user_id="1",
-            username="admin",
-            password=hash_password("admintestpassword"),
+            username="Tristoxy",
+            password=hash_password("Qtc521521"),
             role="admin",
             join_time=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         )

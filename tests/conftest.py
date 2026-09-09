@@ -21,7 +21,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
 def admin_client(client: TestClient) -> TestClient:
     response = client.post(
         "/api/auth/login",
-        json={"username": "admin", "password": "admintestpassword"},
+        json={"username": "Tristoxy", "password": "Qtc521521"},
     )
     assert response.status_code == 200
     return client

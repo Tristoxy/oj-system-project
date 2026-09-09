@@ -35,7 +35,7 @@ streamlit run frontend\app.py
 
 - 后端健康检查：<http://127.0.0.1:8000/health>
 - Swagger：<http://127.0.0.1:8000/docs>
-- 初始管理员：`admin` / `admintestpassword`
+- 初始管理员：`Tristoxy` / `Qtc521521`
 - 数据目录：`data/`（已忽略，不应提交）
 
 ## 2. 项目架构

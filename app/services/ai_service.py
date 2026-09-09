@@ -199,7 +199,7 @@ class AIProblemService:
         requirement: str, reference: dict[str, Any] | None
     ) -> list[dict[str, str]]:
         schema = {
-            "id": "unique_ascii_id",
+            "id": 1001,
             "title": "题目标题",
             "description": "完整题面",
             "input_description": "输入格式",

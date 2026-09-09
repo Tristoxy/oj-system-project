@@ -118,7 +118,7 @@ def test_ai_cancel_really_stops_task_and_enforces_owner(
     admin_client.post("/api/auth/logout")
     admin_client.post(
         "/api/auth/login",
-        json={"username": "admin", "password": "admintestpassword"},
+        json={"username": "Tristoxy", "password": "Qtc521521"},
     )
 
     cancelled = admin_client.put(f"/api/ai/problem-tasks/{created['task_id']}/cancel")
@@ -145,7 +145,7 @@ def test_reset_discards_runtime_model_key(admin_client: TestClient) -> None:
     assert admin_client.post("/api/reset/").status_code == 200
     admin_client.post(
         "/api/auth/login",
-        json={"username": "admin", "password": "admintestpassword"},
+        json={"username": "Tristoxy", "password": "Qtc521521"},
     )
     assert admin_client.get("/api/ai/model-config").json()["data"] == {
         "api_key_configured": False

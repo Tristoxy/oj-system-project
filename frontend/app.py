@@ -25,6 +25,7 @@ for key, default in {
     "http": requests.Session(),
     "user": None,
     "last_submission_id": "",
+    "plagiarism_task_id": "",
     "ai_task_id": "",
     "ai_problem_result": None,
 }.items():
@@ -50,6 +51,25 @@ def api(method: str, path: str, **kwargs: Any) -> Any:
             st.error(payload.get("msg", "Request failed"))
             return None
         return payload.get("data")
+    except requests.RequestException:
+        st.error("Cannot reach the backend. Check the backend URL and server status.")
+        return None
+
+
+def api_download(path: str) -> bytes | None:
+    """Download a protected backend artifact with the current login session."""
+    try:
+        response = st.session_state.http.get(
+            f"{st.session_state.api_base.rstrip('/')}{path}", timeout=20
+        )
+        if response.status_code >= 400:
+            try:
+                message = response.json().get("msg", "下载失败")
+            except ValueError:
+                message = "下载失败"
+            st.error(message)
+            return None
+        return response.content
     except requests.RequestException:
         st.error("Cannot reach the backend. Check the backend URL and server status.")
         return None
@@ -140,13 +160,24 @@ def show_submission(detail: dict[str, Any]) -> None:
 # 函数 `problem_form`：渲染题目新增和编辑表单。
 def problem_form(seed: dict[str, Any] | None, form_key: str) -> dict[str, Any] | None:
     seed = seed or {}
+    seed_id = str(seed.get("id", ""))
+    legacy_id = bool(seed_id and not seed_id.isdigit())
     with st.form(form_key):
-        problem_id = st.text_input(
-            "题目 ID",
-            value=seed.get("id", ""),
-            placeholder="例如：P1001",
-            help="ID 用于唯一标识和检索题目，可使用字母、数字、下划线和连字符。",
-        )
+        if legacy_id:
+            problem_id: int | str = st.text_input(
+                "题目 ID（历史字符串 ID）", value=seed_id, disabled=True
+            )
+            st.caption("这是通过课程接口导入的历史字符串 ID；新建题目统一使用整数 ID。")
+        else:
+            problem_id = int(
+                st.number_input(
+                    "题目 ID（整数）",
+                    min_value=1,
+                    value=int(seed_id) if seed_id else 1001,
+                    step=1,
+                    help="例如 1001。ID 用于唯一标识和检索题目。",
+                )
+            )
         title = st.text_input("标题", value=seed.get("title", ""))
         description = st.text_area("题目描述", value=seed.get("description", ""))
         input_description = st.text_area("输入说明", value=seed.get("input_description", ""))
@@ -186,7 +217,7 @@ def problem_form(seed: dict[str, Any] | None, form_key: str) -> dict[str, Any] |
         st.error("样例和测试点必须是 JSON 数组。")
         return None
     return {
-        "id": problem_id.strip(),
+        "id": problem_id,
         "title": title.strip(),
         "description": description,
         "input_description": input_description,
@@ -283,24 +314,58 @@ problem_ids = [item["id"] for item in problems]
 problems_by_id = {item["id"]: item for item in problems}
 format_problem = lambda problem_id: problem_label(problem_id, problems_by_id)
 
-browse_tab, submit_tab, records_tab, manage_tab, language_tab, account_tab, ai_tab = st.tabs(
-    ["题库", "提交与评测", "提交记录（Step 3）", "题目管理", "语言管理", "用户", "AI 智能命题"]
+(
+    browse_tab,
+    submit_tab,
+    records_tab,
+    manage_tab,
+    language_tab,
+    advanced_tab,
+    account_tab,
+    ai_tab,
+) = st.tabs(
+    [
+        "题库",
+        "提交与评测",
+        "提交记录",
+        "题目管理",
+        "语言管理",
+        "查重 / Special Judge",
+        "用户",
+        "AI 智能命题",
+    ]
 )
 
 with browse_tab:
     if not problem_ids:
         st.info("题库暂无题目，可在“题目管理”中新建。")
     else:
-        browse_id = st.selectbox(
-            "选择题目", problem_ids, key="browse_problem", format_func=format_problem
-        )
-        problem = api("GET", f"/api/problems/{browse_id}")
+        problem_id_query = st.text_input(
+            "按题目 ID 搜索", placeholder="输入完整 ID 或其中一部分，例如 1001"
+        ).strip()
+        matched_problem_ids = [
+            problem_id
+            for problem_id in problem_ids
+            if not problem_id_query or problem_id_query in str(problem_id)
+        ]
+        browse_id = None
+        if not matched_problem_ids:
+            st.warning("没有找到匹配的题目 ID。")
+        else:
+            browse_id = st.selectbox(
+                "选择题目",
+                matched_problem_ids,
+                key="browse_problem",
+                format_func=format_problem,
+            )
+        problem = api("GET", f"/api/problems/{browse_id}") if browse_id else None
         if problem:
             st.header(f"{problem['id']} — {problem['title']}")
-            meta_col1, meta_col2, meta_col3 = st.columns(3)
+            meta_col1, meta_col2, meta_col3, meta_col4 = st.columns(4)
             meta_col1.metric("时间限制", f"{problem.get('time_limit') or 3} 秒")
             meta_col2.metric("内存限制", f"{problem.get('memory_limit') or 128} MB")
             meta_col3.metric("难度", problem.get("difficulty") or "未设置")
+            meta_col4.metric("判题模式", problem.get("judge_mode", "standard"))
             tags = problem.get("tags") or []
             if tags:
                 st.caption("标签：" + "、".join(tags))
@@ -348,16 +413,14 @@ with submit_tab:
         lookup_id = st.text_input(
             "提交 ID", value=st.session_state.last_submission_id, key="submission_lookup"
         )
-        if st.button("查询/刷新", disabled=not lookup_id.strip()):
+        st.button("查询/刷新", disabled=not lookup_id.strip())
+        if lookup_id.strip():
             detail = api("GET", f"/api/submissions/{lookup_id.strip()}")
             if detail:
                 show_submission(detail)
 
 with records_tab:
-    st.subheader("提交记录查询、筛选与重判")
-    st.caption(
-        "这里展示 Step 3：按用户、题目和任务状态筛选，分页查看记录，并由管理员发起重判。"
-    )
+    st.subheader("提交记录查询与筛选")
     filter_col1, filter_col2, filter_col3 = st.columns(3)
     if st.session_state.user["role"] == "admin":
         records_users = api("GET", "/api/users/") or {"users": []}
@@ -529,6 +592,148 @@ with language_tab:
             if registered:
                 st.success(f"语言 {registered['name']} 已注册，可立即用于提交。")
                 st.rerun()
+
+with advanced_tab:
+    st.subheader("代码查重与 Special Judge")
+    if st.session_state.user["role"] != "admin":
+        st.info("这些高级功能只允许管理员操作。")
+    elif not problem_ids:
+        st.info("请先创建题目。")
+    else:
+        spj_section, plagiarism_section = st.tabs(["Special Judge", "代码查重"])
+
+        with spj_section:
+            st.write("为输出存在多种正确形式的题目上传 Python 特判脚本。")
+            spj_problem_id = st.selectbox(
+                "SPJ 题目",
+                problem_ids,
+                format_func=format_problem,
+                key="spj_problem",
+            )
+            spj_problem = api("GET", f"/api/problems/{spj_problem_id}")
+            if spj_problem:
+                st.metric("当前判题模式", spj_problem.get("judge_mode", "standard"))
+            with st.expander("查看 SPJ 脚本参数示例"):
+                st.code(
+                    """import sys
+from pathlib import Path
+
+input_text = Path(sys.argv[1]).read_text(encoding="utf-8")
+expected = Path(sys.argv[2]).read_text(encoding="utf-8")
+actual = Path(sys.argv[3]).read_text(encoding="utf-8")
+
+# 返回码 0 表示 AC，其他返回码表示 WA
+raise SystemExit(0 if sorted(expected.split()) == sorted(actual.split()) else 1)
+""",
+                    language="python",
+                )
+            uploaded_spj = st.file_uploader(
+                "上传 .py 特判脚本", type=["py"], key="spj_upload"
+            )
+            upload_col, delete_col = st.columns(2)
+            if upload_col.button("上传并启用 SPJ", disabled=uploaded_spj is None):
+                uploaded = api(
+                    "POST",
+                    f"/api/problems/{spj_problem_id}/spj",
+                    files={
+                        "file": (
+                            uploaded_spj.name,
+                            uploaded_spj.getvalue(),
+                            "text/x-python",
+                        )
+                    },
+                )
+                if uploaded:
+                    st.success("SPJ 已上传，该题已切换为 spj 判题模式。")
+                    st.rerun()
+            if delete_col.button(
+                "删除 SPJ 并恢复标准判题",
+                disabled=not spj_problem or spj_problem.get("judge_mode") != "spj",
+            ):
+                deleted = api("DELETE", f"/api/problems/{spj_problem_id}/spj")
+                if deleted:
+                    st.success("SPJ 已删除，该题已恢复 standard 判题模式。")
+                    st.rerun()
+
+        with plagiarism_section:
+            st.write("按题目比较所有提交的程序依赖图，并按相似度找出疑似重复代码。")
+            plagiarism_problem_id = st.selectbox(
+                "查重题目",
+                problem_ids,
+                format_func=format_problem,
+                key="plagiarism_problem",
+            )
+            threshold = st.slider(
+                "相似度阈值", min_value=0.0, max_value=1.0, value=0.8, step=0.05
+            )
+            if st.button("开始查重", type="primary"):
+                task = api(
+                    "POST",
+                    "/api/plagiarism/",
+                    json={"problem_id": plagiarism_problem_id, "threshold": threshold},
+                )
+                if task:
+                    st.session_state.plagiarism_task_id = task["task_id"]
+                    st.rerun()
+
+            task_id = st.text_input(
+                "查重任务 ID",
+                value=st.session_state.plagiarism_task_id,
+                key="plagiarism_lookup",
+            )
+            st.button("查询/刷新查重结果", disabled=not task_id.strip())
+            if task_id.strip():
+                plagiarism = api("GET", f"/api/plagiarism/{task_id.strip()}")
+                if plagiarism:
+                    st.write(f"任务状态：`{plagiarism['status']}`")
+                    if plagiarism["status"] == "pending":
+                        st.info("查重正在后台执行，请稍后点击刷新。")
+                    elif plagiarism["status"] == "error":
+                        st.error("查重任务执行失败。")
+                    else:
+                        count_col1, count_col2, count_col3 = st.columns(3)
+                        count_col1.metric("提交数量", plagiarism["submission_count"])
+                        count_col2.metric("比较对数", plagiarism["pair_count"])
+                        count_col3.metric("疑似重复对数", plagiarism["clone_count"])
+                        matches = plagiarism.get("matches", [])
+                        if matches:
+                            st.dataframe(
+                                [
+                                    {
+                                        "提交 A": match["left_submission_id"],
+                                        "提交 B": match["right_submission_id"],
+                                        "相似度": f"{float(match['similarity']):.4f}",
+                                        "是否疑似重复": match["is_clone"],
+                                        "相似节点数": len(match.get("node_mapping", [])),
+                                    }
+                                    for match in matches
+                                ],
+                                width="stretch",
+                                hide_index=True,
+                            )
+                            with st.expander("查看相似节点映射"):
+                                st.json(
+                                    [
+                                        {
+                                            "提交 A": match["left_submission_id"],
+                                            "提交 B": match["right_submission_id"],
+                                            "node_mapping": match.get("node_mapping", []),
+                                        }
+                                        for match in matches
+                                    ]
+                                )
+                        else:
+                            st.caption("没有可比较的提交对。")
+                        report = api_download(
+                            f"/api/plagiarism/{task_id.strip()}/report"
+                        )
+                        if report is not None:
+                            st.download_button(
+                                "下载 JSON 查重报告",
+                                data=report,
+                                file_name=f"plagiarism-{task_id.strip()}.json",
+                                mime="application/json",
+                            )
 
 with account_tab:
     current = api("GET", f"/api/users/{st.session_state.user['user_id']}")

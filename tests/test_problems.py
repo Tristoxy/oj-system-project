@@ -17,7 +17,12 @@ def test_problem_management_flow(
     }
     list_response = admin_client.get("/api/problems/")
     assert list_response.status_code == 200
-    assert list_response.json()["data"] == [{"id": "sum_2", "title": "Two Sum"}]
+    assert list_response.json()["data"] == [
+        {"id": "1001", "title": "两数之和"},
+        {"id": "1002", "title": "两数之差"},
+        {"id": "1003", "title": "两数之积"},
+        {"id": "sum_2", "title": "Two Sum"},
+    ]
 
     detail_response = admin_client.get("/api/problems/sum_2")
     assert detail_response.status_code == 200
@@ -52,6 +57,20 @@ def test_duplicate_problem_id_returns_409(
 
     assert response.status_code == 409
     assert response.json()["code"] == 409
+
+
+# 函数 `test_numeric_problem_id_is_accepted`：前端可直接提交整数题号。
+def test_numeric_problem_id_is_accepted(
+    admin_client: TestClient,
+    problem_payload: dict[str, object],
+) -> None:
+    problem_payload["id"] = 2001
+
+    response = admin_client.post("/api/problems/", json=problem_payload)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["id"] == "2001"
+    assert admin_client.get("/api/problems/2001").status_code == 200
 
 
 # 函数 `test_invalid_problem_returns_400`：负责当前测试或测试夹具。
