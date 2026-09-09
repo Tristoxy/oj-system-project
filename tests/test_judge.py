@@ -1,7 +1,9 @@
 """End-to-end tests for Python/C++ judging and submission queries."""
 
 import asyncio
+import sys
 import time
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -429,3 +431,46 @@ def test_resource_limit_priority_is_resolved_per_field(
     )
 
     assert JudgeRunner._resolve_limits(problem, language) == expected
+
+
+def test_windows_compatible_process_completion_without_sigkill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A normal process result must not depend on the POSIX-only SIGKILL name."""
+    monkeypatch.delattr("app.judge.runner.signal.SIGKILL", raising=False)
+
+    assert JudgeRunner._is_killed_returncode(0) is False
+    assert JudgeRunner._is_killed_returncode(137) is True
+
+
+def test_missing_python3_uses_current_interpreter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = JudgeRunner(backend="local", spj_dir=tmp_path)
+    source = tmp_path / "folder with spaces" / "Main.py"
+    source.parent.mkdir()
+    source.write_text("print(3)", encoding="utf-8")
+    language = Language(name="python", file_ext=".py", run_cmd="python3 {src}")
+    original_which = __import__("shutil").which
+
+    def without_python3(command: str):
+        return None if command == "python3" else original_which(command)
+
+    monkeypatch.setattr("app.judge.runner.shutil.which", without_python3)
+    result = asyncio.run(
+        runner._run_command(
+            language.run_cmd,
+            source,
+            tmp_path / "unused",
+            tmp_path,
+            "",
+            2,
+            128,
+            language,
+        )
+    )
+
+    assert result.result == "AC"
+    assert result.stdout.strip() == "3"
+    assert Path(sys.executable).is_file()

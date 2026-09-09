@@ -6,6 +6,7 @@ import secrets
 import signal
 import shlex
 import shutil
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -49,9 +50,11 @@ class JudgeRunner:
         with tempfile.TemporaryDirectory(prefix="oj-") as directory_text:
             directory = Path(directory_text)
             source = directory / f"Main{language.file_ext}"
-            executable = directory / "Main"
+            docker = self._uses_docker(language)
+            executable_name = "Main.exe" if os.name == "nt" and not docker else "Main"
+            executable = directory / executable_name
             source.write_text(code, encoding="utf-8")
-            if self._uses_docker(language):
+            if docker:
                 os.chmod(directory, 0o777)
 
             time_limit, memory_limit = self._resolve_limits(problem, language)
@@ -182,7 +185,20 @@ class JudgeRunner:
             ]
             process_memory = memory_limit + 128
         else:
-            args = shlex.split(template.format(src=str(source), exe=str(executable)))
+            # Split the trusted template before inserting paths.  Formatting first
+            # breaks a Windows temporary path when it contains spaces or backslashes.
+            args = [
+                part.format(src=str(source), exe=str(executable))
+                for part in shlex.split(template)
+            ]
+            # ``python3`` is the conventional command on Linux, while a standard
+            # Windows installation commonly exposes only ``python.exe``/``py``.
+            # The server is already running under the desired interpreter, so use
+            # it when the configured Python command is unavailable locally.
+            if args and args[0] in {"python", "python3"} and (
+                os.name == "nt" or shutil.which(args[0]) is None
+            ):
+                args[0] = sys.executable
             process_memory = memory_limit
         return await self._execute(
             args,
@@ -256,7 +272,7 @@ class JudgeRunner:
             result = "TLE"
         elif output_exceeded:
             result = "UNK"
-        elif process.returncode in {137, -signal.SIGKILL} and not use_process_limit:
+        elif not use_process_limit and self._is_killed_returncode(process.returncode):
             # Docker reports an OOM-killed container as SIGKILL/137.
             result = "MLE"
         elif process.returncode in {125, 126, 127} and not use_process_limit:
@@ -275,6 +291,14 @@ class JudgeRunner:
             elapsed=elapsed,
             memory_mb=memory_mb,
         )
+
+    @staticmethod
+    def _is_killed_returncode(returncode: int | None) -> bool:
+        """Recognize Docker OOM exit codes without assuming POSIX signals exist."""
+        if returncode == 137:
+            return True
+        sigkill = getattr(signal, "SIGKILL", None)
+        return sigkill is not None and returncode == -sigkill
 
     async def _communicate_limited(
         self,
