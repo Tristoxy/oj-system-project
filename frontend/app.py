@@ -10,6 +10,16 @@ import streamlit as st
 st.set_page_config(page_title="Python Course OJ", page_icon="⚖️", layout="wide")
 st.title("Python Course Online Judge")
 
+CASE_RESULT_HELP = {
+    "AC": "答案正确（Accepted）",
+    "WA": "答案错误（Wrong Answer）",
+    "TLE": "超出时间限制（Time Limit Exceeded）",
+    "MLE": "超出内存限制（Memory Limit Exceeded）",
+    "RE": "运行时错误（Runtime Error）",
+    "CE": "编译错误（Compile Error）",
+    "UNK": "未知评测错误（Unknown）",
+}
+
 for key, default in {
     "api_base": "http://127.0.0.1:8000",
     "http": requests.Session(),
@@ -45,28 +55,98 @@ def api(method: str, path: str, **kwargs: Any) -> Any:
         return None
 
 
+def problem_label(problem_id: str, problems_by_id: dict[str, dict[str, Any]]) -> str:
+    """Combine the searchable stable ID and the human-readable title."""
+    problem = problems_by_id.get(problem_id, {})
+    title = problem.get("title", "")
+    return f"{problem_id} — {title}" if title else problem_id
+
+
+def submission_verdict(detail: dict[str, Any], cases: list[dict[str, Any]]) -> str:
+    """Keep task status and judge verdict separate in the UI."""
+    if detail["status"] == "pending":
+        return "PENDING"
+    if detail["status"] == "error":
+        return "SYSTEM_ERROR"
+    for case in cases:
+        if case.get("result") != "AC":
+            return str(case.get("result", "UNK"))
+    return "AC" if cases else "结果已隐藏"
+
+
 # 函数 `show_submission`：展示提交记录及其评测详情。
 def show_submission(detail: dict[str, Any]) -> None:
-    st.write(f"状态：`{detail['status']}`　提交 ID：`{detail['submission_id']}`")
+    log = None
+    cases: list[dict[str, Any]] = []
+    if detail["status"] != "pending":
+        log = api("GET", f"/api/submissions/{detail['submission_id']}/log")
+        if log and isinstance(log.get("details"), list):
+            cases = log["details"]
+
+    st.subheader(f"提交 #{detail['submission_id']}")
+    st.caption(
+        f"用户 ID：`{detail.get('user_id', '-')}`　"
+        f"题目：`{detail.get('problem_id', '-')}`　"
+        f"语言：`{detail.get('language', '-')}`　"
+        f"提交时间：`{detail.get('created_at', '-')}`"
+    )
+    status_col, verdict_col = st.columns(2)
+    status_col.metric("评测任务状态", detail["status"])
+    verdict_col.metric("判题结果", submission_verdict(detail, cases))
     if detail["status"] == "pending":
-        st.info("评测正在后台运行。")
+        st.info("评测正在后台运行。点击“查询/刷新”可获取最新结果。")
         return
-    left, right = st.columns(2)
-    left.metric("得分", f"{detail.get('score', 0)} / {detail.get('counts', 0)}")
-    right.write("编译信息", detail.get("compile_info") or "解释型语言，无编译阶段")
-    st.write("运行信息", detail.get("run_info") or "暂无")
+
+    maximum_score = int(detail.get("counts", 0))
+    score_col, count_col = st.columns(2)
+    score_col.metric("得分 / 满分", f"{detail.get('score', 0)} / {maximum_score}")
+    count_col.metric("测试点个数", maximum_score // 10)
+    st.caption("课程规定每个测试点 10 分，因此 counts=30 表示满分 30 分、共 3 个测试点。")
+
+    compile_col, run_col = st.columns(2)
+    with compile_col:
+        st.write("编译信息")
+        if detail.get("compile_info"):
+            st.json(detail["compile_info"])
+        else:
+            st.info("解释型语言没有单独的编译阶段。")
+    with run_col:
+        st.write("整体运行信息")
+        st.json(detail.get("run_info") or {"result": "暂无", "message": ""})
     if detail.get("error_info"):
         st.error(detail["error_info"])
-    log = api("GET", f"/api/submissions/{detail['submission_id']}/log")
-    if log and "details" in log:
-        st.dataframe(log["details"], use_container_width=True, hide_index=True)
+
+    st.write("评测点结果")
+    if cases:
+        rows = [
+            {
+                "测试点": case["id"],
+                "状态": case["result"],
+                "状态说明": CASE_RESULT_HELP.get(case["result"], "未知"),
+                "时间（秒）": f"{float(case['time']):.4f}",
+                "内存（MB）": f"{float(case['memory']):.2f}",
+            }
+            for case in cases
+        ]
+        st.dataframe(rows, width="stretch", hide_index=True)
+        st.caption(
+            "状态缩写："
+            + "；".join(f"{key}={value}" for key, value in CASE_RESULT_HELP.items())
+        )
+    else:
+        st.info("测试点详情未公开。管理员可查看；普通用户需等待该题开启“公开测试点日志”。")
 
 
 # 函数 `problem_form`：渲染题目新增和编辑表单。
 def problem_form(seed: dict[str, Any] | None, form_key: str) -> dict[str, Any] | None:
     seed = seed or {}
     with st.form(form_key):
-        problem_id = st.text_input("题目 ID", value=seed.get("id", ""))
+        problem_id = st.text_input(
+            "题目 ID",
+            value=seed.get("id", ""),
+            placeholder="例如：P1001",
+            help="ID 用于唯一标识和检索题目，可使用字母、数字、下划线和连字符。",
+        )
         title = st.text_input("标题", value=seed.get("title", ""))
         description = st.text_area("题目描述", value=seed.get("description", ""))
         input_description = st.text_area("输入说明", value=seed.get("input_description", ""))
@@ -81,6 +161,7 @@ def problem_form(seed: dict[str, Any] | None, form_key: str) -> dict[str, Any] |
             value=json.dumps(seed.get("testcases", []), ensure_ascii=False, indent=2),
             height=220,
         )
+        st.markdown("**可选字段**")
         tags = st.text_input("标签（逗号分隔）", value=", ".join(seed.get("tags", [])))
         c1, c2 = st.columns(2)
         time_limit = c1.number_input(
@@ -171,7 +252,11 @@ if not st.session_state.user:
             username = st.text_input("用户名")
             password = st.text_input("密码", type="password")
             if st.form_submit_button("登录", type="primary"):
-                user = api("POST", "/api/auth/login", json={"username": username, "password": password})
+                user = api(
+                    "POST",
+                    "/api/auth/login",
+                    json={"username": username, "password": password},
+                )
                 if user:
                     st.session_state.user = user
                     st.rerun()
@@ -187,28 +272,52 @@ if not st.session_state.user:
                     st.success("注册成功，请返回登录。")
     st.stop()
 
+# 后端角色可能被管理员修改；每次刷新页面都同步当前用户，避免前端保留旧权限。
+fresh_user = api("GET", f"/api/users/{st.session_state.user['user_id']}")
+if fresh_user:
+    st.session_state.user = fresh_user
+
 problems = api("GET", "/api/problems/") or []
 languages = api("GET", "/api/languages/") or {"name": ["python"]}
 problem_ids = [item["id"] for item in problems]
+problems_by_id = {item["id"]: item for item in problems}
+format_problem = lambda problem_id: problem_label(problem_id, problems_by_id)
 
-browse_tab, submit_tab, manage_tab, account_tab, ai_tab = st.tabs(
-    ["题库", "提交与评测", "题目管理", "用户", "AI 智能命题"]
+browse_tab, submit_tab, records_tab, manage_tab, language_tab, account_tab, ai_tab = st.tabs(
+    ["题库", "提交与评测", "提交记录（Step 3）", "题目管理", "语言管理", "用户", "AI 智能命题"]
 )
 
 with browse_tab:
     if not problem_ids:
         st.info("题库暂无题目，可在“题目管理”中新建。")
     else:
-        browse_id = st.selectbox("选择题目", problem_ids, key="browse_problem")
+        browse_id = st.selectbox(
+            "选择题目", problem_ids, key="browse_problem", format_func=format_problem
+        )
         problem = api("GET", f"/api/problems/{browse_id}")
         if problem:
-            st.header(problem["title"])
+            st.header(f"{problem['id']} — {problem['title']}")
+            meta_col1, meta_col2, meta_col3 = st.columns(3)
+            meta_col1.metric("时间限制", f"{problem.get('time_limit') or 3} 秒")
+            meta_col2.metric("内存限制", f"{problem.get('memory_limit') or 128} MB")
+            meta_col3.metric("难度", problem.get("difficulty") or "未设置")
+            tags = problem.get("tags") or []
+            if tags:
+                st.caption("标签：" + "、".join(tags))
+            optional_parts = [
+                f"来源：{problem['source']}" if problem.get("source") else "",
+                f"作者：{problem['author']}" if problem.get("author") else "",
+            ]
+            if any(optional_parts):
+                st.caption("　".join(part for part in optional_parts if part))
             st.write(problem["description"])
             st.subheader("输入")
             st.write(problem["input_description"])
             st.subheader("输出")
             st.write(problem["output_description"])
             st.caption(f"限制：{problem['constraints']}")
+            if problem.get("hint"):
+                st.info(f"提示：{problem['hint']}")
             for index, sample in enumerate(problem.get("samples", []), start=1):
                 left, right = st.columns(2)
                 left.caption(f"样例输入 {index}")
@@ -221,7 +330,9 @@ with submit_tab:
         st.info("请先创建题目。")
     else:
         with st.form("submit_code"):
-            submit_problem = st.selectbox("题目", problem_ids, key="submit_problem")
+            submit_problem = st.selectbox(
+                "题目", problem_ids, key="submit_problem", format_func=format_problem
+            )
             language = st.selectbox("语言", languages.get("name", ["python"]))
             code = st.text_area("代码", height=300)
             if st.form_submit_button("提交评测", type="primary"):
@@ -241,12 +352,82 @@ with submit_tab:
             detail = api("GET", f"/api/submissions/{lookup_id.strip()}")
             if detail:
                 show_submission(detail)
-        history = api("GET", f"/api/submissions/?user_id={st.session_state.user['user_id']}")
-        st.subheader("我的提交记录")
-        if history and history.get("submissions"):
-            st.dataframe(history["submissions"], use_container_width=True, hide_index=True)
-        else:
-            st.caption("暂无提交。")
+
+with records_tab:
+    st.subheader("提交记录查询、筛选与重判")
+    st.caption(
+        "这里展示 Step 3：按用户、题目和任务状态筛选，分页查看记录，并由管理员发起重判。"
+    )
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
+    if st.session_state.user["role"] == "admin":
+        records_users = api("GET", "/api/users/") or {"users": []}
+        record_user_ids = [item["user_id"] for item in records_users.get("users", [])]
+        default_user_index = (
+            record_user_ids.index(st.session_state.user["user_id"]) + 1
+            if st.session_state.user["user_id"] in record_user_ids
+            else 0
+        )
+        filter_user_id = filter_col1.selectbox(
+            "用户 ID（管理员可选）",
+            [""] + record_user_ids,
+            index=default_user_index,
+            format_func=lambda value: "全部用户" if value == "" else value,
+        )
+    else:
+        filter_user_id = st.session_state.user["user_id"]
+        filter_col1.text_input("用户 ID", value=filter_user_id, disabled=True)
+    filter_problem_id = filter_col2.selectbox(
+        "题目",
+        [""] + problem_ids,
+        format_func=lambda value: "全部题目" if value == "" else format_problem(value),
+    )
+    status_options = ["", "pending", "success", "error"]
+    filter_status = filter_col3.selectbox(
+        "评测任务状态",
+        status_options,
+        format_func=lambda value: "全部状态" if value == "" else value,
+    )
+    page_col, size_col = st.columns(2)
+    record_page = int(page_col.number_input("页码", min_value=1, value=1, step=1))
+    record_page_size = int(
+        size_col.number_input("每页数量", min_value=1, max_value=100, value=20, step=1)
+    )
+
+    history = None
+    if filter_user_id or filter_problem_id:
+        query = {
+            "user_id": filter_user_id or None,
+            "problem_id": filter_problem_id or None,
+            "status": filter_status or None,
+            "page": record_page,
+            "page_size": record_page_size,
+        }
+        history = api("GET", "/api/submissions/", params=query)
+    else:
+        st.info("课程接口要求 user_id 和 problem_id 至少填写一个；请选择一个题目或用户。")
+
+    if history and history.get("submissions"):
+        records = history["submissions"]
+        st.write(f"共 {history['total']} 条记录")
+        st.dataframe(records, width="stretch", hide_index=True)
+        selected_submission = st.selectbox(
+            "选择一条记录查看完整结果",
+            [item["submission_id"] for item in records],
+            key="record_submission",
+        )
+        action_col, rejudge_col = st.columns(2)
+        if action_col.button("查看完整评测详情", type="primary"):
+            selected_detail = api("GET", f"/api/submissions/{selected_submission}")
+            if selected_detail:
+                show_submission(selected_detail)
+        if st.session_state.user["role"] == "admin":
+            if rejudge_col.button("管理员重判此记录"):
+                rejudged = api("PUT", f"/api/submissions/{selected_submission}/rejudge")
+                if rejudged:
+                    st.success(f"提交 {selected_submission} 已进入 pending，评测将在后台重新执行。")
+                    st.rerun()
+    elif history:
+        st.caption("当前筛选条件下没有提交记录。")
 
 with manage_tab:
     mode_options = ["新增题目"]
@@ -258,7 +439,9 @@ with manage_tab:
     seed = None
     target_id = ""
     if mode == "编辑题目":
-        target_id = st.selectbox("待编辑题目", problem_ids, key="edit_problem")
+        target_id = st.selectbox(
+            "待编辑题目", problem_ids, key="edit_problem", format_func=format_problem
+        )
         seed = api("GET", f"/api/problems/{target_id}")
     elif mode == "使用 AI 结果":
         seed = st.session_state.ai_problem_result
@@ -275,7 +458,9 @@ with manage_tab:
     if st.session_state.user["role"] == "admin" and problem_ids:
         st.divider()
         st.subheader("管理员操作")
-        admin_problem = st.selectbox("题目", problem_ids, key="admin_problem")
+        admin_problem = st.selectbox(
+            "题目", problem_ids, key="admin_problem", format_func=format_problem
+        )
         public_cases = st.checkbox("公开测试点日志")
         if st.button("更新日志可见性"):
             updated = api(
@@ -291,6 +476,60 @@ with manage_tab:
                 st.success("题目已删除。")
                 st.rerun()
 
+with language_tab:
+    st.subheader("动态注册新语言")
+    st.caption("课程要求所有已登录用户都可以注册语言。命令中的 {src} 表示源码，{exe} 表示编译产物。")
+    st.write("当前语言：" + "、".join(languages.get("name", [])))
+    with st.form("register_language"):
+        language_name = st.text_input("语言名称", placeholder="例如：python_copy")
+        file_ext = st.text_input("源码扩展名", placeholder="例如：.py")
+        compile_cmd = st.text_input(
+            "编译命令（解释型语言可留空）",
+            placeholder="例如：g++ {src} -O2 -std=c++14 -o {exe}",
+        )
+        run_cmd = st.text_input(
+            "运行命令",
+            placeholder="例如：python3 {src}；编译型语言可填写 {exe}",
+        )
+        limit_col1, limit_col2 = st.columns(2)
+        language_time_limit = limit_col1.text_input(
+            "语言时间限制（秒，可留空继承系统设置）"
+        )
+        language_memory_limit = limit_col2.text_input(
+            "语言内存限制（MB，可留空继承系统设置）"
+        )
+        register_language = st.form_submit_button("注册语言", type="primary")
+    if register_language:
+        try:
+            parsed_time_limit = (
+                float(language_time_limit) if language_time_limit.strip() else None
+            )
+            parsed_memory_limit = (
+                int(language_memory_limit) if language_memory_limit.strip() else None
+            )
+            if parsed_time_limit is not None and parsed_time_limit <= 0:
+                raise ValueError
+            if parsed_memory_limit is not None and parsed_memory_limit <= 0:
+                raise ValueError
+        except ValueError:
+            st.error("时间和内存限制必须留空或填写大于 0 的数字。")
+        else:
+            registered = api(
+                "POST",
+                "/api/languages/",
+                json={
+                    "name": language_name.strip(),
+                    "file_ext": file_ext.strip(),
+                    "compile_cmd": compile_cmd.strip() or None,
+                    "run_cmd": run_cmd.strip(),
+                    "time_limit": parsed_time_limit,
+                    "memory_limit": parsed_memory_limit,
+                },
+            )
+            if registered:
+                st.success(f"语言 {registered['name']} 已注册，可立即用于提交。")
+                st.rerun()
+
 with account_tab:
     current = api("GET", f"/api/users/{st.session_state.user['user_id']}")
     if current:
@@ -300,29 +539,75 @@ with account_tab:
         st.subheader("用户管理")
         users = api("GET", "/api/users/")
         if users:
-            st.dataframe(users["users"], use_container_width=True, hide_index=True)
+            st.dataframe(users["users"], width="stretch", hide_index=True)
             user_ids = [item["user_id"] for item in users["users"]]
+            roles_by_user = {item["user_id"]: item["role"] for item in users["users"]}
+            selected_user = st.selectbox("要修改的用户 ID", user_ids)
             with st.form("change_role"):
-                selected_user = st.selectbox("用户 ID", user_ids)
-                role = st.selectbox("角色", ["user", "admin", "banned"])
+                roles = ["user", "admin", "banned"]
+                role = st.selectbox(
+                    "角色",
+                    roles,
+                    index=roles.index(roles_by_user[selected_user]),
+                    key=f"role_for_{selected_user}",
+                )
                 if st.form_submit_button("更新角色"):
                     updated = api(
                         "PUT", f"/api/users/{selected_user}/role", json={"role": role}
                     )
                     if updated:
                         st.success("角色已更新。")
+                        st.rerun()
+
+        with st.expander("创建新的管理员账号"):
+            with st.form("create_admin"):
+                admin_username = st.text_input("新管理员用户名")
+                admin_password = st.text_input("新管理员密码", type="password")
+                if st.form_submit_button("创建管理员"):
+                    created_admin = api(
+                        "POST",
+                        "/api/users/admin",
+                        json={"username": admin_username, "password": admin_password},
+                    )
+                    if created_admin:
+                        st.success(f"管理员 {created_admin['username']} 已创建。")
+                        st.rerun()
+
+        with st.expander("Step 5：测试点日志访问审计"):
+            audit_col1, audit_col2 = st.columns(2)
+            audit_user_id = audit_col1.text_input("按用户 ID 筛选（可留空）")
+            audit_problem_id = audit_col2.selectbox(
+                "按题目筛选（可留空）",
+                [""] + problem_ids,
+                format_func=lambda value: "全部题目" if value == "" else format_problem(value),
+                key="audit_problem",
+            )
+            access_logs = api(
+                "GET",
+                "/api/logs/access/",
+                params={
+                    "user_id": audit_user_id or None,
+                    "problem_id": audit_problem_id or None,
+                },
+            )
+            if access_logs:
+                st.dataframe(access_logs, width="stretch", hide_index=True)
+            else:
+                st.caption("暂无日志访问记录。")
 
 with ai_tab:
-    st.caption("模型密钥仅保存在后端进程内存中，重启后需要重新配置。")
+    st.caption(
+        "已预设 OpenAI GPT-5.6 Luna。模型密钥仅保存在后端进程内存中，重启后需要重新配置。"
+    )
     with st.form("ai_config"):
         provider_url = st.text_input(
-            "OpenAI 兼容 API 地址", placeholder="https://api.openai.com/v1"
+            "OpenAI 兼容 API 地址", value="https://api.openai.com/v1"
         )
-        model = st.text_input("模型名称")
+        model = st.text_input("模型名称", value="gpt-5.6-luna")
         api_key = st.text_input("模型密钥", type="password")
         c1, c2, c3 = st.columns(3)
-        input_price = c1.number_input("输入价格", min_value=0.0, value=0.0)
-        output_price = c2.number_input("输出价格", min_value=0.0, value=0.0)
+        input_price = c1.number_input("输入价格", min_value=0.0, value=0.20)
+        output_price = c2.number_input("输出价格", min_value=0.0, value=1.20)
         price_unit = c3.number_input("计价 Token 单位", min_value=1, value=1_000_000)
         if st.form_submit_button("保存模型配置"):
             configured = api(
@@ -344,7 +629,11 @@ with ai_tab:
         requirement = st.text_area(
             "命题要求", placeholder="例如：考查二分查找，中等难度，包含重复元素边界情况"
         )
-        reference_id = st.selectbox("参考已有题目（可选）", [""] + problem_ids)
+        reference_id = st.selectbox(
+            "参考已有题目（可选）",
+            [""] + problem_ids,
+            format_func=lambda value: "不参考已有题目" if value == "" else format_problem(value),
+        )
         if st.form_submit_button("开始智能命题", type="primary"):
             task = api(
                 "POST",

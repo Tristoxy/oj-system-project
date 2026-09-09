@@ -97,6 +97,10 @@ class SubmissionService:
             raise ApiError(403, "permission denied")
         data: dict[str, object] = {
             "submission_id": submission.submission_id,
+            "user_id": submission.user_id,
+            "problem_id": submission.problem_id,
+            "language": submission.language,
+            "created_at": submission.created_at,
             "status": submission.status,
         }
         if submission.status == "pending":
@@ -142,10 +146,23 @@ class SubmissionService:
         for item in selected:
             summary: dict[str, object] = {
                 "submission_id": item.submission_id,
+                "user_id": item.user_id,
+                "problem_id": item.problem_id,
+                "language": item.language,
+                "created_at": item.created_at,
                 "status": item.status,
             }
             if item.status == "success":
-                summary.update(score=item.score, counts=item.counts)
+                verdict = "AC"
+                for detail in item.details:
+                    if detail.result != "AC":
+                        verdict = detail.result
+                        break
+                summary.update(score=item.score, counts=item.counts, verdict=verdict)
+            elif item.status == "error":
+                summary["verdict"] = "SYSTEM_ERROR"
+            else:
+                summary["verdict"] = "PENDING"
             result.append(summary)
         return {"total": total, "submissions": result}
 

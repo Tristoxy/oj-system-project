@@ -64,6 +64,12 @@ class UserService:
         def update(state):
             for raw in state["users"]:
                 if raw["user_id"] == user_id:
+                    if raw["role"] == "admin" and role != "admin":
+                        admin_count = sum(
+                            item["role"] == "admin" for item in state["users"]
+                        )
+                        if admin_count == 1:
+                            raise ApiError(400, "cannot demote or ban the last administrator")
                     raw["role"] = role
                     return User.model_validate(raw)
             raise ApiError(404, "user not found")

@@ -41,6 +41,19 @@ def test_admin_can_ban_user(admin_client: TestClient) -> None:
     assert denied.status_code == 403
 
 
+# 函数 `test_last_admin_cannot_be_demoted`：保证系统不会因误操作失去全部管理员。
+def test_last_admin_cannot_be_demoted(admin_client: TestClient) -> None:
+    users = admin_client.get("/api/users/").json()["data"]["users"]
+    admin = next(user for user in users if user["role"] == "admin")
+
+    response = admin_client.put(
+        f"/api/users/{admin['user_id']}/role", json={"role": "user"}
+    )
+
+    assert response.status_code == 400
+    assert admin_client.get("/api/users/").status_code == 200
+
+
 # 函数 `test_user_cannot_read_another_user`：负责当前测试或测试夹具。
 def test_user_cannot_read_another_user(client: TestClient) -> None:
     first = client.post("/api/users/", json={"username": "alice", "password": "secret1"})

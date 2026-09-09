@@ -19,8 +19,12 @@ python -m pip install -r requirements-frontend.txt
 
 ```cmd
 .venv\Scripts\activate.bat
-uvicorn app.main:app --reload
+uvicorn app.main:app
 ```
+
+Windows 下请先使用不带 `--reload` 的启动方式：判题器需要创建本地子进程，而当前 Windows
+环境下 Uvicorn 的 reload 模式可能选择不支持子进程的事件循环。Linux/WSL 开发时再按需使用
+`--reload`。
 
 启动前端（第二个 CMD）：
 

@@ -83,6 +83,10 @@ def test_cpp_judging(
     }
     detail = admin_client.get(f"/api/submissions/{submission_id}").json()["data"]
     assert detail["submission_id"] == submission_id
+    assert detail["user_id"]
+    assert detail["problem_id"] == "sum_2"
+    assert detail["language"] == "cpp"
+    assert detail["created_at"]
     assert detail["status"] == "success"
     assert detail["compile_info"] == {"result": "success", "message": ""}
     assert detail["run_info"]["result"] == "finished"
@@ -184,6 +188,13 @@ def test_submission_filters_pagination_and_rejudge(
     assert first_page.status_code == 200
     assert first_page.json()["data"]["total"] == 2
     assert len(first_page.json()["data"]["submissions"]) == 1
+    assert {
+        "user_id",
+        "problem_id",
+        "language",
+        "created_at",
+        "verdict",
+    } <= first_page.json()["data"]["submissions"][0].keys()
     assert admin_client.get("/api/submissions/?problem_id=sum_2&page=1").status_code == 400
 
     response = admin_client.put(f"/api/submissions/{ids[1]}/rejudge")
