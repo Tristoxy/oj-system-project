@@ -21,17 +21,17 @@ logger = logging.getLogger(__name__)
 
 
 class SubmissionService:
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 保存状态仓库和评测器，并按 submission_id 追踪运行中的后台评测任务。
     def __init__(self, store: StateStore, runner: JudgeRunner) -> None:
         self.store = store
         self.runner = runner
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
-    # 函数 `submit`：负责当前模块中的对应操作。
+    # 执行一分钟限流和外键校验，保存题目/语言快照后创建异步评测。
     async def submit(self, payload: SubmissionCreate, user: User) -> Submission:
         now = datetime.now(timezone.utc)
 
-        # 函数 `create`：负责当前模块中的对应操作。
+        # 在状态锁内完成限流统计、题目语言查找、编号分配和 pending 记录写入。
         def create(state):
             cutoff = now - timedelta(seconds=SUBMISSION_RATE_WINDOW_SECONDS)
             recent = 0
@@ -79,7 +79,7 @@ class SubmissionService:
         await self._schedule(submission.submission_id)
         return submission
 
-    # 函数 `get_submission`：负责当前模块中的对应操作。
+    # 按提交编号读取完整内部记录并恢复为 Submission 模型。
     async def get_submission(self, submission_id: str) -> Submission:
         state = await self.store.read()
         raw = next(
@@ -90,7 +90,7 @@ class SubmissionService:
             raise ApiError(404, "submission not found")
         return Submission.model_validate(raw)
 
-    # 函数 `result_for`：负责当前模块中的对应操作。
+    # 校验本人或管理员权限，pending 时返回基础状态，结束后附加编译运行信息。
     async def result_for(self, submission_id: str, user: User) -> dict[str, object]:
         submission = await self.get_submission(submission_id)
         if user.role != "admin" and submission.user_id != user.user_id:
@@ -114,7 +114,7 @@ class SubmissionService:
         )
         return data
 
-    # 函数 `list_submissions`：负责当前模块中的对应操作。
+    # 校验筛选条件和用户权限，分页返回带最终 verdict 的提交摘要。
     async def list_submissions(
         self,
         user: User,
@@ -166,9 +166,9 @@ class SubmissionService:
             result.append(summary)
         return {"total": total, "submissions": result}
 
-    # 函数 `rejudge`：负责当前模块中的对应操作。
+    # 读取当前题目和语言重新生成快照、清空旧结果，并再次调度该提交。
     async def rejudge(self, submission_id: str) -> Submission:
-        # 函数 `reset`：负责当前模块中的对应操作。
+        # 在状态锁内将指定提交恢复为 pending，同时重置分数、详情和运行信息。
         def reset(state):
             for item in state["submissions"]:
                 if item["submission_id"] == submission_id:
@@ -213,14 +213,14 @@ class SubmissionService:
         await self._schedule(submission_id)
         return submission
 
-    # 函数 `resume_pending`：负责当前模块中的对应操作。
+    # 应用启动或导入结束后，把持久化的 pending 提交逐个重新加入评测队列。
     async def resume_pending(self) -> None:
         state = await self.store.read()
         for item in state["submissions"]:
             if item.get("status") == "pending":
                 await self._schedule(str(item["submission_id"]))
 
-    # 函数 `shutdown`：负责当前模块中的对应操作。
+    # 取消并等待所有评测 Task，确保重置、导入和关闭期间不再回写旧状态。
     async def shutdown(self) -> None:
         tasks = list(self._tasks.values())
         self._tasks.clear()
@@ -229,7 +229,7 @@ class SubmissionService:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    # 函数 `wait`：负责当前模块中的对应操作。
+    # 供测试轮询单次提交，直到不再 pending 或达到指定超时时间。
     async def wait(self, submission_id: str, timeout: float = 10) -> Submission:
         deadline = asyncio.get_running_loop().time() + timeout
         while asyncio.get_running_loop().time() < deadline:
@@ -239,7 +239,7 @@ class SubmissionService:
             await asyncio.sleep(0.02)
         raise TimeoutError(f"submission {submission_id} did not finish")
 
-    # 函数 `_schedule`：负责当前模块中的对应操作。
+    # 每个提交只保留一个评测 Task；重复调度时先取消并等待旧 Task。
     async def _schedule(self, submission_id: str) -> None:
         previous = self._tasks.get(submission_id)
         if previous is not None and not previous.done():
@@ -248,14 +248,14 @@ class SubmissionService:
         task = asyncio.create_task(self._evaluate(submission_id))
         self._tasks[submission_id] = task
 
-        # 函数 `remove`：负责当前模块中的对应操作。
+        # Task 完成回调只清除仍指向自身的映射，避免与重新评测产生竞态。
         def remove(done: asyncio.Task[None]) -> None:
             if self._tasks.get(submission_id) is done:
                 self._tasks.pop(submission_id, None)
 
         task.add_done_callback(remove)
 
-    # 函数 `_evaluate`：负责当前模块中的对应操作。
+    # 使用提交快照执行全部测例、计算分数和 PDG，再原子写入成功或错误终态。
     async def _evaluate(self, submission_id: str) -> None:
         try:
             state = await self.store.read()
@@ -300,7 +300,7 @@ class SubmissionService:
                 ),
             }
 
-            # 函数 `finish`：负责当前模块中的对应操作。
+            # 将测例结果、总分、编译运行摘要和 PDG 写回提交并刷新用户统计。
             def finish(current):
                 for item in current["submissions"]:
                     if item["submission_id"] == submission_id:
@@ -321,7 +321,7 @@ class SubmissionService:
         except Exception:
             logger.exception("Evaluation failed for submission %s", submission_id)
 
-            # 函数 `fail`：负责当前模块中的对应操作。
+            # 后台评测出现系统异常时记录 error 终态，供前端与日志区分代码错误。
             def fail(state):
                 for item in state["submissions"]:
                     if item["submission_id"] == submission_id:

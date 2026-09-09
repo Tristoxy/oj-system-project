@@ -22,16 +22,16 @@ logger = logging.getLogger(__name__)
 
 
 class PlagiarismService:
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 保存状态仓库并追踪当前进程中的查重后台任务，便于关闭时统一取消。
     def __init__(self, store: StateStore) -> None:
         self.store = store
         self._tasks: set[asyncio.Task] = set()
 
-    # 函数 `start`：负责当前模块中的对应操作。
+    # 校验题目存在、持久化 pending 任务，再异步计算该题全部提交对。
     async def start(self, payload: PlagiarismRequest) -> PlagiarismTask:
         now = datetime.now(timezone.utc).isoformat()
 
-        # 函数 `create`：负责当前模块中的对应操作。
+        # 在状态锁内校验题号、分配递增任务 ID 并追加 pending 记录。
         def create(state):
             if not any(item["id"] == payload.problem_id for item in state["problems"]):
                 raise ApiError(404, "problem not found")
@@ -50,7 +50,7 @@ class PlagiarismService:
         background.add_done_callback(self._tasks.discard)
         return task
 
-    # 函数 `resume_pending`：负责当前模块中的对应操作。
+    # 应用重启或数据导入后，为每条 pending 查重记录重新创建后台任务。
     async def resume_pending(self) -> None:
         state = await self.store.read()
         for item in state["plagiarism_tasks"]:
@@ -60,7 +60,7 @@ class PlagiarismService:
             self._tasks.add(background)
             background.add_done_callback(self._tasks.discard)
 
-    # 函数 `shutdown`：负责当前模块中的对应操作。
+    # 取消并等待当前进程中的全部查重 Task，避免退出时留下悬挂任务。
     async def shutdown(self) -> None:
         tasks = list(self._tasks)
         self._tasks.clear()
@@ -69,7 +69,7 @@ class PlagiarismService:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    # 函数 `get`：负责当前模块中的对应操作。
+    # 按任务 ID 读取并验证完整查重状态，不存在时返回 404。
     async def get(self, task_id: str) -> PlagiarismTask:
         state = await self.store.read()
         raw = next(
@@ -80,7 +80,7 @@ class PlagiarismService:
             raise ApiError(404, "plagiarism task not found")
         return PlagiarismTask.model_validate(raw)
 
-    # 函数 `report_path`：负责当前模块中的对应操作。
+    # 仅为已结束且报告文件真实存在的任务返回下载路径。
     async def report_path(self, task_id: str) -> Path:
         task = await self.get(task_id)
         if task.status == "pending":
@@ -90,7 +90,7 @@ class PlagiarismService:
             raise ApiError(404, "plagiarism report not found")
         return path
 
-    # 函数 `_analyze`：负责当前模块中的对应操作。
+    # 构造/复用 PDG，比较每一对提交，写报告后再原子发布 success 状态。
     async def _analyze(self, task_id: str) -> None:
         try:
             state = await self.store.read()
@@ -148,7 +148,7 @@ class PlagiarismService:
             )
             await asyncio.to_thread(temporary.replace, path)
 
-            # 函数 `finish`：负责当前模块中的对应操作。
+            # 持久化各提交的 PDG 以及任务的匹配列表和汇总计数。
             def finish(current):
                 for submission in current["submissions"]:
                     if submission["submission_id"] in graphs:
@@ -168,7 +168,7 @@ class PlagiarismService:
         except Exception:
             logger.exception("Plagiarism analysis failed for task %s", task_id)
 
-            # 函数 `fail`：负责当前模块中的对应操作。
+            # 捕获后台分析异常后将对应任务标为 error，防止永久停在 pending。
             def fail(state):
                 for item in state["plagiarism_tasks"]:
                     if item["task_id"] == task_id:

@@ -11,13 +11,13 @@ from app.repositories.state_store import StateStore
 
 
 class AuthService:
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 保存共享状态仓库，所有登录态都持久化在 sessions 集合中。
     def __init__(self, store: StateStore) -> None:
         self.store = store
 
-    # 函数 `login`：负责当前模块中的对应操作。
+    # 校验凭据和封禁状态，清除过期会话后创建随机且有过期时间的新 Session。
     async def login(self, credentials: Credentials) -> tuple[User, str]:
-        # 函数 `create_session`：负责当前模块中的对应操作。
+        # 在一次原子状态修改中完成用户查找、密码验证、过期清理和会话写入。
         def create_session(state):
             raw = next(
                 (user for user in state["users"] if user["username"] == credentials.username),
@@ -41,9 +41,9 @@ class AuthService:
 
         return await self.store.mutate(create_session)
 
-    # 函数 `logout`：负责当前模块中的对应操作。
+    # 删除指定 Session；不存在时按“未登录”处理而不是静默成功。
     async def logout(self, session_id: str) -> None:
-        # 函数 `remove`：负责当前模块中的对应操作。
+        # 在状态锁内按 Session ID 过滤会话，并通过数量变化判断是否命中。
         def remove(state):
             before = len(state["sessions"])
             state["sessions"] = [
@@ -54,7 +54,7 @@ class AuthService:
 
         await self.store.mutate(remove)
 
-    # 函数 `current_user`：负责当前模块中的对应操作。
+    # 依次校验 Session 存在、未过期、用户仍存在且未被封禁，再返回用户模型。
     async def current_user(self, session_id: str | None) -> User:
         if not session_id:
             raise ApiError(401, "not logged in")

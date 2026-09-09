@@ -32,14 +32,14 @@ class User(BaseModel):
     submit_count: int = Field(default=0, ge=0)
     resolve_count: int = Field(default=0, ge=0)
 
-    # 函数 `validate_join_date`：负责当前模块中的对应操作。
+    # 强制注册日期使用固定的 YYYY-MM-DD 格式，保证导入导出一致。
     @field_validator("join_time")
     @classmethod
     def validate_join_date(cls, value: str) -> str:
         datetime.strptime(value, "%Y-%m-%d")
         return value
 
-    # 函数 `public`：负责当前模块中的对应操作。
+    # 生成可返回给客户端的用户资料，明确排除密码哈希。
     def public(self) -> dict[str, object]:
         return self.model_dump(exclude={"password"})
 

@@ -12,12 +12,12 @@ from app.core.config import DEFAULT_DATA_DIR
 from app.core.exceptions import register_exception_handlers
 
 
-# 函数 `create_app`：负责当前模块中的对应操作。
+# 创建一套可指定数据目录的 FastAPI 应用，便于生产运行和测试隔离。
 def create_app(data_dir: Path | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     container = AppContainer(data_dir or DEFAULT_DATA_DIR)
 
-    # 函数 `lifespan`：负责当前模块中的对应操作。
+    # 启动时初始化数据和待处理任务，退出时可靠取消所有后台任务。
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await container.initialize()

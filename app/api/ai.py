@@ -12,7 +12,7 @@ from app.models.user import User
 router = APIRouter(prefix="/api/ai", tags=["ai-problem-authoring"])
 
 
-# 函数 `update_model_config`：负责当前模块中的对应操作。
+# 保存当前用户本次进程内的模型地址、名称、密钥和计价配置。
 @router.put("/model-config")
 async def update_model_config(
     payload: ModelConfigUpdate,
@@ -23,7 +23,7 @@ async def update_model_config(
     return success_response(data, msg="model config updated")
 
 
-# 函数 `get_model_config`：负责当前模块中的对应操作。
+# 返回当前用户的非敏感模型配置，绝不回传 API Key 原文。
 @router.get("/model-config")
 async def get_model_config(
     current_user: User = Depends(get_current_user),
@@ -32,7 +32,7 @@ async def get_model_config(
     return success_response(await container.ai.get_config(current_user))
 
 
-# 函数 `create_problem_task`：负责当前模块中的对应操作。
+# 创建异步 AI 命题任务，并立即返回可供前端轮询的任务编号和状态。
 @router.post("/problem-tasks/")
 async def create_problem_task(
     payload: ProblemTaskCreate,
@@ -45,7 +45,7 @@ async def create_problem_task(
     )
 
 
-# 函数 `get_problem_task`：负责当前模块中的对应操作。
+# 查询本人或管理员可见的 AI 命题进度、结果和 Token 用量。
 @router.get("/problem-tasks/{task_id}")
 async def get_problem_task(
     task_id: str,
@@ -56,7 +56,7 @@ async def get_problem_task(
     return success_response(task.model_dump(mode="json", exclude={"user_id"}))
 
 
-# 函数 `cancel_problem_task`：负责当前模块中的对应操作。
+# 中断本人或管理员有权操作且尚未结束的 AI 命题任务。
 @router.put("/problem-tasks/{task_id}/cancel")
 async def cancel_problem_task(
     task_id: str,

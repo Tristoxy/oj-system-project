@@ -26,7 +26,7 @@ ALLOWED_EXECUTABLES = {
 FORBIDDEN_SHELL_TOKENS = {";", "&&", "||", "|", ">", "<", "`", "$", "\n", "\r"}
 
 
-# 函数 `hash_password`：负责当前模块中的对应操作。
+# 为每个密码生成随机盐，并用 PBKDF2-SHA256 派生可持久化的哈希字符串。
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac(
@@ -45,7 +45,7 @@ def hash_password(password: str) -> str:
     )
 
 
-# 函数 `verify_password`：负责当前模块中的对应操作。
+# 解析已存哈希、重新计算候选密码摘要，并以常量时间方式比较结果。
 def verify_password(password: str, encoded: str) -> bool:
     try:
         algorithm, iterations_text, salt_text, expected_text = encoded.split("$", 3)
@@ -69,7 +69,7 @@ def verify_password(password: str, encoded: str) -> bool:
         return False
 
 
-# 函数 `is_password_hash`：负责当前模块中的对应操作。
+# 只检查导入密码哈希的算法、迭代次数、Base64 和长度是否合法，不执行昂贵验证。
 def is_password_hash(encoded: str) -> bool:
     """Validate an imported hash without doing an expensive password check."""
     try:
@@ -87,7 +87,7 @@ def is_password_hash(encoded: str) -> bool:
     )
 
 
-# 函数 `validate_command_template`：负责当前模块中的对应操作。
+# 限制动态语言命令的可执行程序、占位符和 Shell 元字符，阻止命令注入。
 def validate_command_template(command: str, *, require_src: bool = False) -> None:
     if any(token in command for token in FORBIDDEN_SHELL_TOKENS):
         raise ApiError(400, "unsafe language command")

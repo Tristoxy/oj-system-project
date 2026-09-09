@@ -12,7 +12,7 @@ from app.models.user import Credentials, User
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-# 函数 `login`：负责当前模块中的对应操作。
+# 校验账号密码，创建服务端 Session，并把 HttpOnly Session ID 写入 Cookie。
 @router.post("/login")
 async def login(
     payload: Credentials,
@@ -34,7 +34,7 @@ async def login(
     )
 
 
-# 函数 `logout`：负责当前模块中的对应操作。
+# 删除当前 Cookie 对应的服务端 Session，并要求浏览器清除该 Cookie。
 @router.post("/logout")
 async def logout(
     request: Request,

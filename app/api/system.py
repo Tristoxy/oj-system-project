@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api", tags=["system"])
 MAX_IMPORT_BYTES = 16 * 1024 * 1024
 
 
-# 函数 `reset_system`：负责当前模块中的对应操作。
+# 仅管理员可停止后台任务、清空持久化数据、重建默认项并退出当前会话。
 @router.post("/reset/")
 async def reset_system(
     response: Response,
@@ -32,7 +32,7 @@ async def reset_system(
     return success_response(None, msg="system reset successfully")
 
 
-# 函数 `export_data`：负责当前模块中的对应操作。
+# 仅管理员可按课程固定结构导出用户、题目和提交数据。
 @router.get("/export/")
 async def export_data(
     admin: User = Depends(require_admin),
@@ -42,7 +42,7 @@ async def export_data(
     return success_response(await container.system.export_data())
 
 
-# 函数 `import_data`：负责当前模块中的对应操作。
+# 校验管理员上传的 JSON 大小、结构和引用后，合并数据并恢复后台任务。
 @router.post("/import/")
 async def import_data(
     file: UploadFile = File(...),

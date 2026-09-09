@@ -16,7 +16,7 @@ from app.services.user_service import UserService
 
 
 class AppContainer:
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 围绕同一个 StateStore 组装评测器和全部业务服务，保证它们共享一致的数据状态。
     def __init__(self, data_dir: Path) -> None:
         self.store = StateStore(data_dir)
         self.system = SystemService(self.store)
@@ -30,18 +30,18 @@ class AppContainer:
         self.submissions = SubmissionService(self.store, self.runner)
         self.plagiarism = PlagiarismService(self.store)
 
-    # 函数 `initialize`：负责当前模块中的对应操作。
+    # 初始化持久化数据，并恢复上次退出时仍处于 pending 的评测和查重任务。
     async def initialize(self) -> None:
         await self.system.initialize()
         await self.submissions.resume_pending()
         await self.plagiarism.resume_pending()
 
-    # 函数 `cancel_background_tasks`：负责当前模块中的对应操作。
+    # 取消评测、查重和 AI 命题后台任务，供重置、导入和进程退出前统一清理。
     async def cancel_background_tasks(self) -> None:
         await self.submissions.shutdown()
         await self.plagiarism.shutdown()
         await self.ai.shutdown()
 
-    # 函数 `close`：负责当前模块中的对应操作。
+    # 执行应用生命周期的关闭清理；当前只需停止全部后台任务。
     async def close(self) -> None:
         await self.cancel_background_tasks()

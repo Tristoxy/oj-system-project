@@ -36,11 +36,11 @@ class ProcessResult:
 class JudgeRunner:
     MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 保存 SPJ 脚本目录，普通编译和运行则始终使用每次评测独立的临时目录。
     def __init__(self, spj_dir: Path) -> None:
         self.spj_dir = spj_dir
 
-    # 函数 `judge`：负责当前模块中的对应操作。
+    # 写入源文件、可选编译，再逐测例运行并根据 standard/strict/spj 模式判定结果。
     async def judge(
         self,
         code: str,
@@ -111,7 +111,7 @@ class JudgeRunner:
                 )
             return results
 
-    # 函数 `_resolve_limits`：负责当前模块中的对应操作。
+    # 资源限制优先采用题目设置，其次语言设置，最后回退到系统默认值。
     @staticmethod
     def _resolve_limits(problem: Problem, language: Language) -> tuple[float, int]:
         """按题目、语言、系统默认值的顺序解析资源限制。"""
@@ -128,7 +128,7 @@ class JudgeRunner:
             memory_limit = DEFAULT_MEMORY_LIMIT
         return time_limit, memory_limit
 
-    # 函数 `_run_command`：负责当前模块中的对应操作。
+    # 安全拆分已验证的命令模板、替换源文件/程序路径，并兼容 Windows Python 命令。
     async def _run_command(
         self,
         template: str,
@@ -158,7 +158,7 @@ class JudgeRunner:
             directory,
         )
 
-    # 函数 `_execute`：负责当前模块中的对应操作。
+    # 启动无 Shell 子进程，并发监控时间、内存和输出上限，最终映射为 OJ 状态。
     async def _execute(
         self,
         args: list[str],
@@ -235,13 +235,13 @@ class JudgeRunner:
             memory_mb=memory_mb,
         )
 
-    # 函数 `_communicate_limited`：负责当前模块中的对应操作。
+    # 并发写入标准输入和读取 stdout/stderr，超过总输出上限时立即终止进程树。
     async def _communicate_limited(
         self,
         process: asyncio.subprocess.Process,
         stdin: str,
     ) -> tuple[bytes, bytes, bool]:
-        # 函数 `feed_input`：负责当前模块中的对应操作。
+        # 将当前测例输入写入子进程并关闭 stdin，让等待 EOF 的选手程序继续执行。
         async def feed_input() -> None:
             if process.stdin is None:
                 return
@@ -253,7 +253,7 @@ class JudgeRunner:
             finally:
                 process.stdin.close()
 
-        # 函数 `read_stream`：负责当前模块中的对应操作。
+        # 分块读取单个输出流，最多保留 4 MiB，并在首次超限时杀死进程树。
         async def read_stream(
             stream: asyncio.StreamReader | None,
         ) -> tuple[bytes, bool]:
@@ -279,7 +279,7 @@ class JudgeRunner:
         stderr, stderr_exceeded = stderr_result
         return stdout, stderr, stdout_exceeded or stderr_exceeded
 
-    # 函数 `_memory_limiter`：负责当前模块中的对应操作。
+    # 在 POSIX 子进程启动前生成 RLIMIT_AS 设置函数；Windows 由 psutil 监控兜底。
     @staticmethod
     def _memory_limiter(memory_limit: int):
         if resource is None or os.name != "posix":
@@ -287,13 +287,13 @@ class JudgeRunner:
 
         limit_bytes = memory_limit * 1024 * 1024
 
-        # 函数 `apply_limit`：负责当前模块中的对应操作。
+        # 在子进程执行用户程序前设置虚拟地址空间硬限制和软限制。
         def apply_limit() -> None:
             resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
 
         return apply_limit
 
-    # 函数 `_looks_like_memory_error`：负责当前模块中的对应操作。
+    # 从 Python/C++ 常见错误文本识别被操作系统拒绝分配内存的退出。
     @staticmethod
     def _looks_like_memory_error(stderr: bytes) -> bool:
         lowered = stderr.lower()
@@ -307,7 +307,7 @@ class JudgeRunner:
             )
         )
 
-    # 函数 `_monitor_memory`：负责当前模块中的对应操作。
+    # 高频采样主进程及全部后代的 RSS 峰值，超过限制即终止并标记 MLE。
     async def _monitor_memory(
         self,
         process: asyncio.subprocess.Process,
@@ -334,7 +334,7 @@ class JudgeRunner:
             pass
         return maximum, exceeded
 
-    # 函数 `_kill_process_tree`：负责当前模块中的对应操作。
+    # POSIX 杀死独立进程组；Windows 终止主进程，并容忍进程已退出的竞态。
     @staticmethod
     def _kill_process_tree(process: asyncio.subprocess.Process) -> None:
         try:
@@ -345,7 +345,7 @@ class JudgeRunner:
         except (ProcessLookupError, PermissionError):
             pass
 
-    # 函数 `_compare_output`：负责当前模块中的对应操作。
+    # 按 strict 原文、spj 脚本或 standard 行尾规范化三种模式比较输出。
     async def _compare_output(
         self,
         problem: Problem,
@@ -359,7 +359,7 @@ class JudgeRunner:
             return await self._run_spj(problem.id, testcase, actual, directory)
         return "AC" if self._normalize(actual) == self._normalize(testcase.output) else "WA"
 
-    # 函数 `_run_spj`：负责当前模块中的对应操作。
+    # 把 SPJ 与输入/标准答案/用户答案复制到隔离目录，并限时限内存执行判定脚本。
     async def _run_spj(
         self,
         problem_id: str,
@@ -399,7 +399,7 @@ class JudgeRunner:
         )
         return "AC" if result.result == "AC" else "WA"
 
-    # 函数 `_normalize`：负责当前模块中的对应操作。
+    # 统一换行符、忽略每行行尾空白和末尾空行，供 standard 模式比较。
     @staticmethod
     def _normalize(value: str) -> str:
         lines = [line.rstrip() for line in value.replace("\r\n", "\n").split("\n")]

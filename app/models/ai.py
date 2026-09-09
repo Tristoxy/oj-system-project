@@ -19,7 +19,7 @@ class ModelConfigUpdate(BaseModel):
     output_price: float = Field(default=0, ge=0)
     price_unit: int = Field(default=1_000_000, gt=0)
 
-    # 函数 `require_http_url`：负责当前模块中的对应操作。
+    # 去除地址末尾斜杠，并拒绝缺少 http(s) 协议或主机名的模型服务地址。
     @field_validator("provider_url")
     @classmethod
     def require_http_url(cls, value: str) -> str:

@@ -12,7 +12,7 @@ from app.models.user import User
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
 
-# 函数 `submit_code`：负责当前模块中的对应操作。
+# 为当前用户创建 pending 提交并启动异步评测，接口不等待判题完成。
 @router.post("/")
 async def submit_code(
     payload: SubmissionCreate,
@@ -25,7 +25,7 @@ async def submit_code(
     )
 
 
-# 函数 `list_submissions`：负责当前模块中的对应操作。
+# 按用户、题目、任务状态和分页参数查询当前用户有权查看的提交摘要。
 @router.get("/")
 async def list_submissions(
     user_id: str | None = Query(default=None),
@@ -47,7 +47,7 @@ async def list_submissions(
     return success_response(data)
 
 
-# 函数 `get_submission`：负责当前模块中的对应操作。
+# 返回本人或管理员可见的单次提交状态、分数及编译运行信息。
 @router.get("/{submission_id}")
 async def get_submission(
     submission_id: str,
@@ -59,7 +59,7 @@ async def get_submission(
     )
 
 
-# 函数 `rejudge_submission`：负责当前模块中的对应操作。
+# 仅管理员可把指定提交重置为 pending，并重新加入后台评测队列。
 @router.put("/{submission_id}/rejudge")
 async def rejudge_submission(
     submission_id: str,

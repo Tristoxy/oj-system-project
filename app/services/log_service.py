@@ -12,11 +12,11 @@ from app.repositories.state_store import StateStore
 
 
 class LogService:
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 保存共享状态仓库，用于读取评测日志和写入访问审计。
     def __init__(self, store: StateStore) -> None:
         self.store = store
 
-    # 函数 `get_log`：负责当前模块中的对应操作。
+    # 校验提交与题目，判定本人/管理员/公开测例权限，并按权限裁剪 details。
     async def get_log(self, submission_id: str, user: User) -> dict[str, object]:
         state = await self.store.read()
         raw_submission = next(
@@ -42,7 +42,7 @@ class LogService:
             data["details"] = [detail.model_dump(mode="json") for detail in submission.details]
         return data
 
-    # 函数 `list_access_logs`：负责当前模块中的对应操作。
+    # 按用户和题目筛选审计记录，按时间倒序后执行分页。
     async def list_access_logs(
         self,
         user_id: str | None,
@@ -59,7 +59,7 @@ class LogService:
         items.sort(key=lambda item: item.time, reverse=True)
         return [item.model_dump(mode="json") for item in paginate(items, page, page_size)]
 
-    # 函数 `_record`：负责当前模块中的对应操作。
+    # 无论日志访问获准或拒绝，都追加包含用户、题目和 HTTP 结果的审计记录。
     async def _record(self, user_id: str, problem_id: str, status_code: int) -> None:
         log = AccessLog(
             user_id=user_id,

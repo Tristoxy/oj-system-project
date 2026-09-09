@@ -11,7 +11,7 @@ from app.models.user import User
 router = APIRouter(tags=["logs"])
 
 
-# 函数 `get_submission_log`：负责当前模块中的对应操作。
+# 按提交编号查询评测日志，由服务层裁剪测例详情并记录访问审计。
 @router.get("/api/submissions/{submission_id}/log")
 async def get_submission_log(
     submission_id: str,
@@ -21,7 +21,7 @@ async def get_submission_log(
     return success_response(await container.logs.get_log(submission_id, current_user))
 
 
-# 函数 `list_access_logs`：负责当前模块中的对应操作。
+# 仅管理员可按用户或题目筛选并分页查看日志访问审计记录。
 @router.get("/api/logs/access/")
 async def list_access_logs(
     user_id: str | None = Query(default=None),

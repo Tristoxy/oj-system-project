@@ -33,7 +33,7 @@ for key, default in {
         st.session_state[key] = default
 
 
-# 函数 `api`：统一发送前端 API 请求并处理响应。
+# 复用同一个 requests.Session 发送 API 请求，使登录 Cookie 在所有页面间自动携带。
 def api(method: str, path: str, **kwargs: Any) -> Any:
     """Call the backend with the shared cookie session and show safe errors."""
     try:
@@ -56,6 +56,7 @@ def api(method: str, path: str, **kwargs: Any) -> Any:
         return None
 
 
+# 使用当前登录会话下载受保护文件；失败时在页面提示并返回 None。
 def api_download(path: str) -> bytes | None:
     """Download a protected backend artifact with the current login session."""
     try:
@@ -75,6 +76,7 @@ def api_download(path: str) -> bytes | None:
         return None
 
 
+# 把稳定题号和可读标题组合成下拉框标签，同时保留按题号检索的能力。
 def problem_label(problem_id: str, problems_by_id: dict[str, dict[str, Any]]) -> str:
     """Combine the searchable stable ID and the human-readable title."""
     problem = problems_by_id.get(problem_id, {})
@@ -82,6 +84,7 @@ def problem_label(problem_id: str, problems_by_id: dict[str, dict[str, Any]]) ->
     return f"{problem_id} — {title}" if title else problem_id
 
 
+# 将 submission 的任务状态与测例 verdict 分开：成功任务取第一个非 AC 测例作为总结果。
 def submission_verdict(detail: dict[str, Any], cases: list[dict[str, Any]]) -> str:
     """Keep task status and judge verdict separate in the UI."""
     if detail["status"] == "pending":
@@ -94,7 +97,7 @@ def submission_verdict(detail: dict[str, Any], cases: list[dict[str, Any]]) -> s
     return "AC" if cases else "结果已隐藏"
 
 
-# 函数 `show_submission`：展示提交记录及其评测详情。
+# 查询有权查看的评测日志，并集中展示用户、总状态、得分、编译信息和逐测例资源用量。
 def show_submission(detail: dict[str, Any]) -> None:
     log = None
     cases: list[dict[str, Any]] = []
@@ -157,7 +160,7 @@ def show_submission(detail: dict[str, Any]) -> None:
         st.info("测试点详情未公开。管理员可查看；普通用户需等待该题开启“公开测试点日志”。")
 
 
-# 函数 `problem_form`：渲染题目新增和编辑表单。
+# 用同一份表单处理新建和编辑，解析样例/测例 JSON 后返回课程题目配置结构。
 def problem_form(seed: dict[str, Any] | None, form_key: str) -> dict[str, Any] | None:
     seed = seed or {}
     seed_id = str(seed.get("id", ""))
@@ -235,7 +238,7 @@ def problem_form(seed: dict[str, Any] | None, form_key: str) -> dict[str, Any] |
     }
 
 
-# 函数 `render_ai_progress`：轮询并展示 AI 命题任务进度。
+# 通过 Streamlit Fragment 每秒轮询 AI 任务，并提供中断、用量展示和结果回填。
 @st.fragment(run_every=1.0)
 def render_ai_progress() -> None:
     """Poll independently so progress remains live and the cancel button works."""

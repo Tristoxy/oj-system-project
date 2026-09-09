@@ -12,7 +12,7 @@ class LanguageCreate(BaseModel):
     time_limit: float | None = Field(default=None, gt=0, le=60)
     memory_limit: int | None = Field(default=None, gt=0, le=4096)
 
-    # 函数 `normalize_extension`：负责当前模块中的对应操作。
+    # 拒绝路径分隔符和空字节，并把 py 这类输入统一规范为 .py。
     @field_validator("file_ext")
     @classmethod
     def normalize_extension(cls, value: str) -> str:

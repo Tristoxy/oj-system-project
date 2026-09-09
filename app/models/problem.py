@@ -73,7 +73,7 @@ class ProblemUpdate(BaseModel):
     def normalize_numeric_id(cls, value: object) -> object:
         return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
 
-    # 函数 `require_edit`：负责当前模块中的对应操作。
+    # 拒绝空更新以及只重复提交不可修改题号的请求。
     @model_validator(mode="after")
     def require_edit(self) -> "ProblemUpdate":
         if not self.model_fields_set or self.model_fields_set == {"id"}:

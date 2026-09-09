@@ -13,7 +13,7 @@ from app.models.user import User
 router = APIRouter(prefix="/api/plagiarism", tags=["plagiarism"])
 
 
-# 函数 `start_plagiarism_check`：负责当前模块中的对应操作。
+# 仅管理员可为指定题目创建后台 PDG 查重任务。
 @router.post("/")
 async def start_plagiarism_check(
     payload: PlagiarismRequest,
@@ -25,7 +25,7 @@ async def start_plagiarism_check(
     return success_response({"task_id": task.task_id, "status": task.status})
 
 
-# 函数 `get_plagiarism_result`：负责当前模块中的对应操作。
+# 仅管理员可查询查重任务状态、相似代码对和节点映射结果。
 @router.get("/{task_id}")
 async def get_plagiarism_result(
     task_id: str,
@@ -37,7 +37,7 @@ async def get_plagiarism_result(
     return success_response(task.model_dump(mode="json"))
 
 
-# 函数 `download_plagiarism_report`：负责当前模块中的对应操作。
+# 校验查重已完成后，以 JSON 附件形式返回对应的持久化报告。
 @router.get("/{task_id}/report")
 async def download_plagiarism_report(
     task_id: str,

@@ -11,20 +11,20 @@ from collections import Counter
 from typing import Any
 
 
-# 函数 `build_pdg`：负责当前模块中的对应操作。
+# Python 代码优先构建 AST/CFG/PDG；其他语言或语法错误则降级为 Token 流图。
 def build_pdg(code: str, language: str) -> dict[str, Any]:
     if language == "python":
         return _build_python_pdg(code)
     return _build_token_pdg(code)
 
 
-# 函数 `graph_similarity`：负责当前模块中的对应操作。
+# 综合节点多重集、带类型边和语句顺序三项相似度，输出 0–1 的加权分数。
 def graph_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     left_nodes = Counter(node["label"] for node in left.get("nodes", []))
     right_nodes = Counter(node["label"] for node in right.get("nodes", []))
     node_score = _multiset_jaccard(left_nodes, right_nodes)
 
-    # 函数 `edge_features`：负责当前模块中的对应操作。
+    # 将每条边转换为“源标签、边类型、目标标签”，使节点编号变化不影响比较。
     def edge_features(graph):
         labels = {node["id"]: node["label"] for node in graph.get("nodes", [])}
         return Counter(
@@ -39,7 +39,7 @@ def graph_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     return round(0.55 * node_score + 0.30 * edge_score + 0.15 * sequence_score, 4)
 
 
-# 函数 `map_similar_nodes`：负责当前模块中的对应操作。
+# 按规范化标签贪心匹配未使用节点，生成报告可展示的节点与源代码行号对应关系。
 def map_similar_nodes(
     left: dict[str, Any],
     right: dict[str, Any],
@@ -72,13 +72,13 @@ def map_similar_nodes(
     return mapping
 
 
-# 函数 `_multiset_jaccard`：负责当前模块中的对应操作。
+# 用 Counter 的交并集计算保留重复次数的 Jaccard 相似度。
 def _multiset_jaccard(left: Counter, right: Counter) -> float:
     union = sum((left | right).values())
     return 1.0 if union == 0 else sum((left & right).values()) / union
 
 
-# 函数 `_build_python_pdg`：负责当前模块中的对应操作。
+# 从 Python AST 构造语句节点、顺序流边、控制依赖边和定义—使用数据边。
 def _build_python_pdg(code: str) -> dict[str, Any]:
     try:
         tree = ast.parse(code)
@@ -91,7 +91,7 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
     definitions: dict[int, set[str]] = {}
     uses: dict[int, set[str]] = {}
 
-    # 函数 `add_node`：负责当前模块中的对应操作。
+    # 为一条语句创建规范化节点，同时记录该语句读取和定义的变量集合。
     def add_node(statement: ast.stmt) -> int:
         node_id = len(nodes)
         header = _statement_header(statement)
@@ -109,7 +109,7 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
         uses[node_id] = loads
         return node_id
 
-    # 函数 `build_block`：负责当前模块中的对应操作。
+    # 递归展开代码块，连接分支、循环、异常和嵌套作用域的流边与控制边。
     def build_block(
         statements: list[ast.stmt],
         incoming: set[int],
@@ -200,7 +200,7 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
     return {"language": "python", "nodes": nodes, "edges": edges}
 
 
-# 函数 `_reaching_definition_edges`：负责当前模块中的对应操作。
+# 用到达定义不动点分析找出每次变量读取可能对应的定义节点，并建立数据边。
 def _reaching_definition_edges(
     node_count: int,
     flow_edges: set[tuple[int, int]],
@@ -245,7 +245,7 @@ def _reaching_definition_edges(
     }
 
 
-# 函数 `_statement_header`：负责当前模块中的对应操作。
+# 深拷贝语句并移除嵌套块，只保留当前 CFG 节点自身的语法头部。
 def _statement_header(node: ast.stmt) -> ast.stmt:
     """Return a copy without nested blocks for one statement-level CFG node."""
     header = copy.deepcopy(node)
@@ -260,18 +260,18 @@ def _statement_header(node: ast.stmt) -> ast.stmt:
     return header
 
 
-# 函数 `_normalized_ast_label`：负责当前模块中的对应操作。
+# 将变量名、参数名和常量值匿名化后序列化 AST，使简单改名不能规避查重。
 def _normalized_ast_label(node: ast.AST) -> str:
     class Normalizer(ast.NodeTransformer):
-        # 函数 `visit_Name`：负责当前模块中的对应操作。
+        # 把所有变量引用统一替换为 VAR，同时保留 Load/Store 上下文。
         def visit_Name(self, item: ast.Name):
             return ast.copy_location(ast.Name(id="VAR", ctx=item.ctx), item)
 
-        # 函数 `visit_arg`：负责当前模块中的对应操作。
+        # 把函数形参名统一替换为 ARG，并移除可能泄露原结构的类型标注。
         def visit_arg(self, item: ast.arg):
             return ast.copy_location(ast.arg(arg="ARG", annotation=None), item)
 
-        # 函数 `visit_Constant`：负责当前模块中的对应操作。
+        # 只保留常量的数据类型，不保留具体字符串或数值。
         def visit_Constant(self, item: ast.Constant):
             kind = type(item.value).__name__
             return ast.copy_location(ast.Constant(value=f"<{kind}>"), item)
@@ -280,7 +280,7 @@ def _normalized_ast_label(node: ast.AST) -> str:
     return ast.dump(normalized, annotate_fields=False, include_attributes=False)
 
 
-# 函数 `_names`：负责当前模块中的对应操作。
+# 遍历语句头 AST，分别收集被读取和被定义/删除的变量名。
 def _names(node: ast.AST) -> tuple[set[str], set[str]]:
     loads: set[str] = set()
     stores: set[str] = set()
@@ -293,7 +293,7 @@ def _names(node: ast.AST) -> tuple[set[str], set[str]]:
     return loads, stores
 
 
-# 函数 `_build_token_pdg`：负责当前模块中的对应操作。
+# 将标识符和字面量归一化后按固定窗口建顺序图，作为非 Python 代码的查重表示。
 def _build_token_pdg(code: str) -> dict[str, Any]:
     normalized: list[str] = []
     try:

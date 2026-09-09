@@ -12,17 +12,17 @@ from app.repositories.state_store import StateStore
 
 
 class ProblemService:
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 保存状态仓库；题目元数据写入 JSON，SPJ 脚本单独保存在 spj 目录。
     def __init__(self, store: StateStore) -> None:
         self.store = store
 
-    # 函数 `list_problems`：负责当前模块中的对应操作。
+    # 按题号排序并只返回检索列表需要的 id 与 title，避免泄露隐藏测例。
     async def list_problems(self) -> list[dict[str, str]]:
         state = await self.store.read()
         problems = sorted(state["problems"], key=lambda item: item["id"])
         return [{"id": item["id"], "title": item["title"]} for item in problems]
 
-    # 函数 `get_problem`：负责当前模块中的对应操作。
+    # 按题号读取完整题目配置并通过 Pydantic 恢复类型。
     async def get_problem(self, problem_id: str) -> Problem:
         state = await self.store.read()
         raw = next((item for item in state["problems"] if item["id"] == problem_id), None)
@@ -30,11 +30,11 @@ class ProblemService:
             raise ApiError(404, "problem not found")
         return Problem.model_validate(raw)
 
-    # 函数 `add_problem`：负责当前模块中的对应操作。
+    # 将已校验的创建请求转换为存储模型，并保证题号全局唯一。
     async def add_problem(self, payload: ProblemCreate) -> Problem:
         problem = Problem.model_validate(payload.model_dump())
 
-        # 函数 `add`：负责当前模块中的对应操作。
+        # 在状态锁内再次检查题号冲突并追加题目，避免并发创建重号。
         def add(state):
             if any(item["id"] == problem.id for item in state["problems"]):
                 raise ApiError(409, "problem id already exists")
@@ -43,9 +43,9 @@ class ProblemService:
 
         return await self.store.mutate(add)
 
-    # 函数 `delete_problem`：负责当前模块中的对应操作。
+    # 从状态中删除题目；成功后再清理同题号的可选 SPJ 文件。
     async def delete_problem(self, problem_id: str) -> None:
-        # 函数 `delete`：负责当前模块中的对应操作。
+        # 在状态锁内查找并移除题目，不存在时返回 404。
         def delete(state):
             for index, item in enumerate(state["problems"]):
                 if item["id"] == problem_id:
@@ -58,14 +58,14 @@ class ProblemService:
         if spj_file.exists():
             spj_file.unlink()
 
-    # 函数 `update_problem`：负责当前模块中的对应操作。
+    # 合并请求中实际提供的字段，拒绝改题号并重新校验完整题目。
     async def update_problem(self, problem_id: str, payload: ProblemUpdate) -> Problem:
         changes = payload.model_dump(exclude_unset=True)
         requested_id = changes.pop("id", None)
         if requested_id is not None and requested_id != problem_id:
             raise ApiError(400, "problem id cannot be changed")
 
-        # 函数 `update`：负责当前模块中的对应操作。
+        # 在状态锁内定位旧题目、合并字段并以验证后的模型整体替换。
         def update(state):
             for index, raw in enumerate(state["problems"]):
                 if raw["id"] != problem_id:
@@ -81,9 +81,9 @@ class ProblemService:
 
         return await self.store.mutate(update)
 
-    # 函数 `set_log_visibility`：负责当前模块中的对应操作。
+    # 独立修改题目的 public_cases 开关，控制评测测例详情是否公开。
     async def set_log_visibility(self, problem_id: str, public_cases: bool) -> Problem:
-        # 函数 `update`：负责当前模块中的对应操作。
+        # 在状态锁内定位题目并保存新的测例可见性。
         def update(state):
             for item in state["problems"]:
                 if item["id"] == problem_id:
@@ -93,11 +93,11 @@ class ProblemService:
 
         return await self.store.mutate(update)
 
-    # 函数 `spj_path`：负责当前模块中的对应操作。
+    # 把经过题号正则校验的 ID 映射为数据目录中的固定 Python 文件路径。
     def spj_path(self, problem_id: str) -> Path:
         return self.store.spj_dir / f"{problem_id}.py"
 
-    # 函数 `save_spj`：负责当前模块中的对应操作。
+    # 校验题目、文件类型/大小、Python 语法及危险 AST 操作后原子保存 SPJ。
     async def save_spj(self, problem_id: str, filename: str, content: bytes) -> None:
         problem = await self.get_problem(problem_id)
         if not filename.endswith(".py"):
@@ -178,7 +178,7 @@ class ProblemService:
         if problem.judge_mode != "spj":
             await self._set_judge_mode(problem_id, "spj")
 
-    # 函数 `delete_spj`：负责当前模块中的对应操作。
+    # 删除存在的 SPJ 脚本，并把题目评测模式恢复为 standard。
     async def delete_spj(self, problem_id: str) -> None:
         await self.get_problem(problem_id)
         path = self.spj_path(problem_id)
@@ -187,16 +187,16 @@ class ProblemService:
         await asyncio.to_thread(path.unlink)
         await self._set_judge_mode(problem_id, "standard")
 
-    # 函数 `_write_spj`：负责当前模块中的对应操作。
+    # 通过同目录临时文件写入并 replace，防止 SPJ 文件只写入一部分。
     def _write_spj(self, problem_id: str, text: str) -> None:
         self.store.spj_dir.mkdir(parents=True, exist_ok=True)
         temporary = self.spj_path(problem_id).with_suffix(".py.tmp")
         temporary.write_text(text, encoding="utf-8")
         temporary.replace(self.spj_path(problem_id))
 
-    # 函数 `_set_judge_mode`：负责当前模块中的对应操作。
+    # 在持久化题目上切换 standard 或 spj 模式，与脚本文件状态保持一致。
     async def _set_judge_mode(self, problem_id: str, mode: str) -> None:
-        # 函数 `update`：负责当前模块中的对应操作。
+        # 在状态锁内按题号更新 judge_mode，不存在则返回 404。
         def update(state):
             for item in state["problems"]:
                 if item["id"] == problem_id:

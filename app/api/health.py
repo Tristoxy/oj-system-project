@@ -8,7 +8,7 @@ from app.core.responses import success_response
 router = APIRouter(tags=["health"])
 
 
-# 函数 `health_check`：负责当前模块中的对应操作。
+# 提供无需登录的轻量探针，用来确认后端进程和路由可以响应。
 @router.get("/health")
 async def health_check() -> dict[str, object]:
     """Return a response proving that the API process is healthy."""

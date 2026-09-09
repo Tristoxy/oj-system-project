@@ -25,7 +25,7 @@ class _RuntimeModelConfig:
     output_price: float
     price_unit: int
 
-    # 函数 `public`：负责当前模块中的对应操作。
+    # 返回可展示的模型配置，用布尔值表示密钥已配置而不泄露密钥内容。
     def public(self) -> dict[str, object]:
         return {
             "provider_url": self.provider_url,
@@ -42,7 +42,7 @@ class AIProblemService:
 
     REQUEST_TIMEOUT_SECONDS = 90
 
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 初始化按用户隔离的内存配置、任务记录、后台 Task 映射和异步锁。
     def __init__(self, store: StateStore) -> None:
         self.store = store
         self._configs: dict[str, _RuntimeModelConfig] = {}
@@ -50,7 +50,7 @@ class AIProblemService:
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._lock = asyncio.Lock()
 
-    # 函数 `set_config`：负责当前模块中的对应操作。
+    # 仅在当前进程内保存该用户模型配置，避免 API Key 写入 state.json。
     async def set_config(
         self, user: User, payload: ModelConfigUpdate
     ) -> dict[str, object]:
@@ -59,7 +59,7 @@ class AIProblemService:
             self._configs[user.user_id] = config
         return config.public()
 
-    # 函数 `get_config`：负责当前模块中的对应操作。
+    # 查询当前用户的脱敏配置；未配置时只返回 false 状态。
     async def get_config(self, user: User) -> dict[str, object]:
         async with self._lock:
             config = self._configs.get(user.user_id)
@@ -67,7 +67,7 @@ class AIProblemService:
             return {"api_key_configured": False}
         return config.public()
 
-    # 函数 `create`：负责当前模块中的对应操作。
+    # 校验模型配置和可选参考题，创建记录并用 asyncio 启动异步命题。
     async def create(self, payload: ProblemTaskCreate, user: User) -> AIProblemTask:
         async with self._lock:
             config = self._configs.get(user.user_id)
@@ -99,7 +99,7 @@ class AIProblemService:
             task.add_done_callback(lambda done: self._remove_task(task_id, done))
         return record.model_copy(deep=True)
 
-    # 函数 `get`：负责当前模块中的对应操作。
+    # 只允许任务所有者或管理员读取任务，并返回深拷贝避免外部修改记录。
     async def get(self, task_id: str, user: User) -> AIProblemTask:
         async with self._lock:
             record = self._records.get(task_id)
@@ -109,7 +109,7 @@ class AIProblemService:
                 raise ApiError(403, "permission denied")
             return record.model_copy(deep=True)
 
-    # 函数 `cancel`：负责当前模块中的对应操作。
+    # 校验任务权限与状态，将其标记 cancelled 后取消对应 asyncio Task。
     async def cancel(self, task_id: str, user: User) -> AIProblemTask:
         async with self._lock:
             record = self._records.get(task_id)
@@ -127,7 +127,7 @@ class AIProblemService:
             result = record.model_copy(deep=True)
         return result
 
-    # 函数 `shutdown`：负责当前模块中的对应操作。
+    # 取消并等待全部模型请求，同时清空任务记录和敏感的内存密钥。
     async def shutdown(self) -> None:
         async with self._lock:
             tasks = list(self._tasks.values())
@@ -141,12 +141,12 @@ class AIProblemService:
             self._configs.clear()
             self._records.clear()
 
-    # 函数 `_remove_task`：负责当前模块中的对应操作。
+    # 后台 Task 结束时仅移除仍指向该 Task 的映射，避免误删后继任务。
     def _remove_task(self, task_id: str, done: asyncio.Task[None]) -> None:
         if self._tasks.get(task_id) is done:
             self._tasks.pop(task_id, None)
 
-    # 函数 `_set_progress`：负责当前模块中的对应操作。
+    # 在异步锁内把未取消任务切换为 running 并更新前端可见进度。
     async def _set_progress(self, task_id: str, message: str) -> None:
         async with self._lock:
             record = self._records.get(task_id)
@@ -154,7 +154,7 @@ class AIProblemService:
                 record.status = "running"
                 record.progress = message
 
-    # 函数 `_generate`：负责当前模块中的对应操作。
+    # 串联提示词构造、模型请求、结果校验和用量计算，并收敛终态错误信息。
     async def _generate(
         self,
         task_id: str,
@@ -193,7 +193,7 @@ class AIProblemService:
                     record.progress = "命题失败"
                     record.error = "模型请求或返回格式无效，请检查配置后重试"
 
-    # 函数 `_build_messages`：负责当前模块中的对应操作。
+    # 构造要求模型只返回课程题目 JSON 的系统提示，并可附加参考题内容。
     @staticmethod
     def _build_messages(
         requirement: str, reference: dict[str, Any] | None
@@ -228,7 +228,7 @@ class AIProblemService:
             )
         return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
-    # 函数 `_request_model`：负责当前模块中的对应操作。
+    # 调用 OpenAI 兼容的 chat/completions 接口，并校验顶层响应为 JSON 对象。
     async def _request_model(
         self, config: _RuntimeModelConfig, messages: list[dict[str, str]]
     ) -> dict[str, Any]:
@@ -249,7 +249,7 @@ class AIProblemService:
             raise ValueError("model response must be an object")
         return data
 
-    # 函数 `_parse_response`：负责当前模块中的对应操作。
+    # 去除可选 Markdown 代码围栏，验证题目字段，并按配置计算 Token 成本。
     @staticmethod
     def _parse_response(
         response: dict[str, Any], config: _RuntimeModelConfig

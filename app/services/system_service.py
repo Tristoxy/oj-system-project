@@ -100,15 +100,15 @@ DEFAULT_PROBLEMS = [
 
 
 class SystemService:
-    # 函数 `__init__`：负责当前模块中的对应操作。
+    # 保存共享状态仓库，统一负责初始数据、重置以及课程数据包导入导出。
     def __init__(self, store: StateStore) -> None:
         self.store = store
 
-    # 函数 `initialize`：负责当前模块中的对应操作。
+    # 初始化状态文件，迁移旧管理员账号，并补齐默认语言和 1001–1003 三道题。
     async def initialize(self) -> None:
         await self.store.initialize()
 
-        # 函数 `add_defaults`：负责当前模块中的对应操作。
+        # 在状态锁内执行幂等默认数据迁移，已有同名语言或题号不会重复添加。
         def add_defaults(state):
             if not any(user.get("username") == "Tristoxy" for user in state["users"]):
                 legacy_admin = next(
@@ -138,13 +138,13 @@ class SystemService:
 
         await self.store.mutate(add_defaults)
 
-    # 函数 `reset`：负责当前模块中的对应操作。
+    # 用空状态覆盖全部集合、清理衍生文件，再重新创建系统默认数据。
     async def reset(self) -> None:
         await self.store.replace(empty_state())
         await self.store.clear_files()
         await self.initialize()
 
-    # 函数 `export_data`：负责当前模块中的对应操作。
+    # 重新计算用户统计并导出课程规定的 users/problems/submissions 固定结构。
     async def export_data(self) -> dict[str, object]:
         state = await self.store.read()
         recompute_user_stats(state)
@@ -168,9 +168,9 @@ class SystemService:
         ]
         return {"users": users, "problems": problems, "submissions": submissions}
 
-    # 函数 `import_data`：负责当前模块中的对应操作。
+    # 以新数据覆盖同 ID 旧数据、补建 PDG、清除会话并刷新用户统计。
     async def import_data(self, bundle: ImportBundle) -> None:
-        # 函数 `merge`：负责当前模块中的对应操作。
+        # 在一个原子状态修改中再次校验引用并合并三类课程数据。
         def merge(state):
             self._validate_import_against_state(bundle, state)
             imported_users = [item.model_dump(mode="json") for item in bundle.users]
@@ -188,19 +188,19 @@ class SystemService:
 
         await self.store.mutate(merge)
 
-    # 函数 `validate_import`：负责当前模块中的对应操作。
+    # 在暂停后台任务之前先完整预检导入包，避免无效文件影响正在运行的任务。
     async def validate_import(self, bundle: ImportBundle) -> None:
         """Validate completely before the caller pauses background workers."""
         state = await self.store.read()
         self._validate_import_against_state(bundle, state)
 
-    # 函数 `_validate_import_against_state`：负责当前模块中的对应操作。
+    # 校验哈希、包内唯一性、合并后用户名唯一性以及提交的用户/题目外键。
     @staticmethod
     def _validate_import_against_state(
         bundle: ImportBundle,
         state: dict[str, list[dict]],
     ) -> None:
-        # 函数 `require_unique`：负责当前模块中的对应操作。
+        # 检查同一字段值在导入包内是否重复，并转成统一的 400 业务错误。
         def require_unique(values: list[str], label: str) -> None:
             if len(values) != len(set(values)):
                 raise ApiError(400, f"duplicate {label} in import data")
@@ -232,7 +232,7 @@ class SystemService:
             if submission.problem_id not in problem_ids:
                 raise ApiError(400, "submission references an unknown problem")
 
-    # 函数 `_merge`：负责当前模块中的对应操作。
+    # 按指定主键执行 upsert：已存在则原位替换，否则追加到集合末尾。
     @staticmethod
     def _merge(target: list[dict], incoming: list[dict], key: str) -> None:
         indexes = {item[key]: index for index, item in enumerate(target)}
@@ -242,7 +242,7 @@ class SystemService:
             else:
                 target.append(item)
 
-    # 函数 `_initial_admin`：负责当前模块中的对应操作。
+    # 构造题目要求的初始管理员，并在创建时立即哈希固定初始密码。
     @staticmethod
     def _initial_admin() -> User:
         return User(

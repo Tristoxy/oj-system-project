@@ -12,7 +12,7 @@ from app.models.user import Credentials, RoleUpdate, User
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-# 函数 `register_user`：负责当前模块中的对应操作。
+# 公开注册普通用户，密码由服务层哈希后保存。
 @router.post("/")
 async def register_user(
     payload: Credentials,
@@ -22,7 +22,7 @@ async def register_user(
     return success_response(user.public(), msg="register success")
 
 
-# 函数 `create_admin`：负责当前模块中的对应操作。
+# 仅现有管理员可创建新的管理员账号。
 @router.post("/admin")
 async def create_admin(
     payload: Credentials,
@@ -34,7 +34,7 @@ async def create_admin(
     return success_response({"user_id": user.user_id, "username": user.username})
 
 
-# 函数 `list_users`：负责当前模块中的对应操作。
+# 仅管理员可分页查看去除密码字段后的用户列表及提交统计。
 @router.get("/")
 async def list_users(
     page: int | None = Query(default=None),
@@ -46,7 +46,7 @@ async def list_users(
     return success_response(await container.users.list_users(page, page_size))
 
 
-# 函数 `get_user`：负责当前模块中的对应操作。
+# 允许用户查看自己、管理员查看任意用户的公开资料。
 @router.get("/{user_id}")
 async def get_user(
     user_id: str,
@@ -59,7 +59,7 @@ async def get_user(
     return success_response(user.public())
 
 
-# 函数 `update_role`：负责当前模块中的对应操作。
+# 仅管理员可修改 user/admin/banned 角色，服务层保护最后一名管理员。
 @router.put("/{user_id}/role")
 async def update_role(
     user_id: str,

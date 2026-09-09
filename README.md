@@ -54,7 +54,6 @@ app/
                             加锁、深拷贝和原子 JSON 持久化
 frontend/app.py             Streamlit 用户、题目、评测和 AI 页面
 tests/                      接口、评测、权限、持久化和 AI 回归测试
-docs/                       要求对照、报告、安全说明和答辩材料
 ```
 
 请求链路固定为：`HTTP → api 路由 → dependencies 鉴权 → service 业务逻辑 → StateStore`
@@ -205,15 +204,15 @@ docs/                       要求对照、报告、安全说明和答辩材料
 | Step 3 列表、筛选、状态、重判 | `app/api/submissions.py`、`app/services/submission_service.py` |
 | Step 4 注册、登录、角色、分页 | `app/api/auth.py`、`app/api/users.py`、`app/services/auth_service.py`、`app/services/user_service.py` |
 | Step 5 测例日志、公开性、审计 | `app/api/logs.py`、`app/services/log_service.py`、`app/models/log.py` |
-| Step 6 用户/题目/评测前端 | `frontend/app.py` |
+| Step 6 重置、导入和导出持久化数据 | `app/api/system.py`、`app/repositories/state_store.py`、`app/services/system_service.py` |
+| Adv 1 Special Judge | `app/services/problem_service.py`、`app/judge/runner.py`、`frontend/app.py` |
+| Adv 2 Streamlit 前端交互 | `frontend/app.py` |
+| Adv 4 PDG 代码查重 | `app/plagiarism/pdg.py`、`app/services/plagiarism_service.py`、`frontend/app.py` |
 | AI R1 出题界面和结果入库 | `app/api/ai.py`、`app/services/ai_service.py`、`frontend/app.py` |
 | AI R2 自定义模型配置和密钥保护 | `app/models/ai.py`、`app/services/ai_service.py` |
 | AI R3 实时进度和真实中断 | `AIProblemService._generate/cancel`、`render_ai_progress` |
 | AI R4 Token 和费用统计 | `AIProblemService._parse_response`、`AIUsage`、`render_ai_progress` |
 | 统一状态码和响应结构 | `app/core/exceptions.py`、`app/core/responses.py` |
-| 持久化、reset、导入导出 | `app/repositories/state_store.py`、`app/services/system_service.py` |
-| SPJ（额外功能） | `app/services/problem_service.py`、`app/judge/runner.py` |
-| PDG 查重（额外功能） | `app/plagiarism/pdg.py`、`app/services/plagiarism_service.py` |
 
 ## 5. Linux 兼容性和提交前检查
 
