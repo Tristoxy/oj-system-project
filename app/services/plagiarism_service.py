@@ -22,13 +22,16 @@ logger = logging.getLogger(__name__)
 
 
 class PlagiarismService:
+    # 函数 `__init__`：负责当前模块中的对应操作。
     def __init__(self, store: StateStore) -> None:
         self.store = store
         self._tasks: set[asyncio.Task] = set()
 
+    # 函数 `start`：负责当前模块中的对应操作。
     async def start(self, payload: PlagiarismRequest) -> PlagiarismTask:
         now = datetime.now(timezone.utc).isoformat()
 
+        # 函数 `create`：负责当前模块中的对应操作。
         def create(state):
             if not any(item["id"] == payload.problem_id for item in state["problems"]):
                 raise ApiError(404, "problem not found")
@@ -47,6 +50,7 @@ class PlagiarismService:
         background.add_done_callback(self._tasks.discard)
         return task
 
+    # 函数 `resume_pending`：负责当前模块中的对应操作。
     async def resume_pending(self) -> None:
         state = await self.store.read()
         for item in state["plagiarism_tasks"]:
@@ -56,6 +60,7 @@ class PlagiarismService:
             self._tasks.add(background)
             background.add_done_callback(self._tasks.discard)
 
+    # 函数 `shutdown`：负责当前模块中的对应操作。
     async def shutdown(self) -> None:
         tasks = list(self._tasks)
         self._tasks.clear()
@@ -64,6 +69,7 @@ class PlagiarismService:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    # 函数 `get`：负责当前模块中的对应操作。
     async def get(self, task_id: str) -> PlagiarismTask:
         state = await self.store.read()
         raw = next(
@@ -74,6 +80,7 @@ class PlagiarismService:
             raise ApiError(404, "plagiarism task not found")
         return PlagiarismTask.model_validate(raw)
 
+    # 函数 `report_path`：负责当前模块中的对应操作。
     async def report_path(self, task_id: str) -> Path:
         task = await self.get(task_id)
         if task.status == "pending":
@@ -83,6 +90,7 @@ class PlagiarismService:
             raise ApiError(404, "plagiarism report not found")
         return path
 
+    # 函数 `_analyze`：负责当前模块中的对应操作。
     async def _analyze(self, task_id: str) -> None:
         try:
             state = await self.store.read()
@@ -140,6 +148,7 @@ class PlagiarismService:
             )
             await asyncio.to_thread(temporary.replace, path)
 
+            # 函数 `finish`：负责当前模块中的对应操作。
             def finish(current):
                 for submission in current["submissions"]:
                     if submission["submission_id"] in graphs:
@@ -154,11 +163,12 @@ class PlagiarismService:
                             clone_count=sum(match.is_clone for match in matches),
                         )
 
-            # Publish success only after the downloadable report exists.
+            # 只有可下载的报告生成后，才发布成功状态。
             await self.store.mutate(finish)
         except Exception:
             logger.exception("Plagiarism analysis failed for task %s", task_id)
 
+            # 函数 `fail`：负责当前模块中的对应操作。
             def fail(state):
                 for item in state["plagiarism_tasks"]:
                     if item["task_id"] == task_id:

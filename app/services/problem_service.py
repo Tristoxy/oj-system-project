@@ -12,14 +12,17 @@ from app.repositories.state_store import StateStore
 
 
 class ProblemService:
+    # 函数 `__init__`：负责当前模块中的对应操作。
     def __init__(self, store: StateStore) -> None:
         self.store = store
 
+    # 函数 `list_problems`：负责当前模块中的对应操作。
     async def list_problems(self) -> list[dict[str, str]]:
         state = await self.store.read()
         problems = sorted(state["problems"], key=lambda item: item["id"])
         return [{"id": item["id"], "title": item["title"]} for item in problems]
 
+    # 函数 `get_problem`：负责当前模块中的对应操作。
     async def get_problem(self, problem_id: str) -> Problem:
         state = await self.store.read()
         raw = next((item for item in state["problems"] if item["id"] == problem_id), None)
@@ -27,9 +30,11 @@ class ProblemService:
             raise ApiError(404, "problem not found")
         return Problem.model_validate(raw)
 
+    # 函数 `add_problem`：负责当前模块中的对应操作。
     async def add_problem(self, payload: ProblemCreate) -> Problem:
         problem = Problem.model_validate(payload.model_dump())
 
+        # 函数 `add`：负责当前模块中的对应操作。
         def add(state):
             if any(item["id"] == problem.id for item in state["problems"]):
                 raise ApiError(409, "problem id already exists")
@@ -38,7 +43,9 @@ class ProblemService:
 
         return await self.store.mutate(add)
 
+    # 函数 `delete_problem`：负责当前模块中的对应操作。
     async def delete_problem(self, problem_id: str) -> None:
+        # 函数 `delete`：负责当前模块中的对应操作。
         def delete(state):
             for index, item in enumerate(state["problems"]):
                 if item["id"] == problem_id:
@@ -51,12 +58,14 @@ class ProblemService:
         if spj_file.exists():
             spj_file.unlink()
 
+    # 函数 `update_problem`：负责当前模块中的对应操作。
     async def update_problem(self, problem_id: str, payload: ProblemUpdate) -> Problem:
         changes = payload.model_dump(exclude_unset=True)
         requested_id = changes.pop("id", None)
         if requested_id is not None and requested_id != problem_id:
             raise ApiError(400, "problem id cannot be changed")
 
+        # 函数 `update`：负责当前模块中的对应操作。
         def update(state):
             for index, raw in enumerate(state["problems"]):
                 if raw["id"] != problem_id:
@@ -72,7 +81,9 @@ class ProblemService:
 
         return await self.store.mutate(update)
 
+    # 函数 `set_log_visibility`：负责当前模块中的对应操作。
     async def set_log_visibility(self, problem_id: str, public_cases: bool) -> Problem:
+        # 函数 `update`：负责当前模块中的对应操作。
         def update(state):
             for item in state["problems"]:
                 if item["id"] == problem_id:
@@ -82,9 +93,11 @@ class ProblemService:
 
         return await self.store.mutate(update)
 
+    # 函数 `spj_path`：负责当前模块中的对应操作。
     def spj_path(self, problem_id: str) -> Path:
         return self.store.spj_dir / f"{problem_id}.py"
 
+    # 函数 `save_spj`：负责当前模块中的对应操作。
     async def save_spj(self, problem_id: str, filename: str, content: bytes) -> None:
         problem = await self.get_problem(problem_id)
         if not filename.endswith(".py"):
@@ -165,6 +178,7 @@ class ProblemService:
         if problem.judge_mode != "spj":
             await self._set_judge_mode(problem_id, "spj")
 
+    # 函数 `delete_spj`：负责当前模块中的对应操作。
     async def delete_spj(self, problem_id: str) -> None:
         await self.get_problem(problem_id)
         path = self.spj_path(problem_id)
@@ -173,13 +187,16 @@ class ProblemService:
         await asyncio.to_thread(path.unlink)
         await self._set_judge_mode(problem_id, "standard")
 
+    # 函数 `_write_spj`：负责当前模块中的对应操作。
     def _write_spj(self, problem_id: str, text: str) -> None:
         self.store.spj_dir.mkdir(parents=True, exist_ok=True)
         temporary = self.spj_path(problem_id).with_suffix(".py.tmp")
         temporary.write_text(text, encoding="utf-8")
         temporary.replace(self.spj_path(problem_id))
 
+    # 函数 `_set_judge_mode`：负责当前模块中的对应操作。
     async def _set_judge_mode(self, problem_id: str, mode: str) -> None:
+        # 函数 `update`：负责当前模块中的对应操作。
         def update(state):
             for item in state["problems"]:
                 if item["id"] == problem_id:

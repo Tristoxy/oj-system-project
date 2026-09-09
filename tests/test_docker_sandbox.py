@@ -10,6 +10,7 @@ from app.judge.runner import JudgeRunner, ProcessResult
 from app.models.language import Language
 
 
+# 函数 `test_docker_runner_applies_isolation_flags`：负责当前测试或测试夹具。
 def test_docker_runner_applies_isolation_flags(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -26,6 +27,7 @@ def test_docker_runner_applies_isolation_flags(
     source.write_text("print(1)", encoding="utf-8")
     captured: dict[str, object] = {}
 
+    # 函数 `fake_execute`：负责当前测试或测试夹具。
     async def fake_execute(*args, **kwargs):
         captured["args"] = args[0]
         captured["kwargs"] = kwargs
@@ -66,6 +68,7 @@ def test_docker_runner_applies_isolation_flags(
     }
 
 
+# 函数 `test_timed_out_docker_client_triggers_container_cleanup`：负责当前测试或测试夹具。
 def test_timed_out_docker_client_triggers_container_cleanup(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -73,6 +76,7 @@ def test_timed_out_docker_client_triggers_container_cleanup(
     runner = JudgeRunner("docker", tmp_path)
     cleaned: list[str] = []
 
+    # 函数 `fake_cleanup`：负责当前测试或测试夹具。
     async def fake_cleanup(name: str) -> None:
         cleaned.append(name)
 
@@ -93,6 +97,7 @@ def test_timed_out_docker_client_triggers_container_cleanup(
     assert cleaned == ["oj-test-container"]
 
 
+# 函数 `test_local_runner_kills_descendants_after_parent_exits`：负责当前测试或测试夹具。
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="requires POSIX process groups")
 def test_local_runner_kills_descendants_after_parent_exits(tmp_path: Path) -> None:
     marker = tmp_path / "orphan-marker"
@@ -112,6 +117,7 @@ if child == 0:
 print("parent finished")
 """
 
+    # 函数 `run`：负责当前测试或测试夹具。
     async def run() -> ProcessResult:
         runner = JudgeRunner("local", tmp_path)
         result = await runner._execute(

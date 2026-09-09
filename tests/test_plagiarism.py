@@ -7,12 +7,14 @@ from fastapi.testclient import TestClient
 from app.plagiarism.pdg import build_pdg, graph_similarity
 
 
+# 函数 `test_renamed_python_programs_are_similar`：负责当前测试或测试夹具。
 def test_renamed_python_programs_are_similar() -> None:
     first = build_pdg("a = int(input())\nprint(a + 1)", "python")
     second = build_pdg("value = int(input())\nprint(value + 9)", "python")
     assert graph_similarity(first, second) >= 0.8
 
 
+# 函数 `test_cfg_models_if_branches_and_reaching_definitions`：负责当前测试或测试夹具。
 def test_cfg_models_if_branches_and_reaching_definitions() -> None:
     graph = build_pdg(
         "if flag:\n    value = 1\nelse:\n    value = 2\nprint(value)",
@@ -33,6 +35,7 @@ def test_cfg_models_if_branches_and_reaching_definitions() -> None:
     assert (4, 5, "data") in edges
 
 
+# 函数 `test_cfg_contains_loop_back_edge`：负责当前测试或测试夹具。
 def test_cfg_contains_loop_back_edge() -> None:
     graph = build_pdg(
         "while ready:\n    ready = update()\nprint(ready)",
@@ -50,6 +53,7 @@ def test_cfg_contains_loop_back_edge() -> None:
     assert (1, 3) in flow_edges
 
 
+# 函数 `test_plagiarism_task`：负责当前测试或测试夹具。
 def test_plagiarism_task(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -85,6 +89,7 @@ def test_plagiarism_task(
     assert report.json()["summary"]["clone_count"] == 1
 
 
+# 函数 `test_plagiarism_endpoints_require_admin`：负责当前测试或测试夹具。
 def test_plagiarism_endpoints_require_admin(
     client: TestClient,
     problem_payload: dict[str, object],

@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 
 
+# 函数 `test_unauthenticated_error_precedes_invalid_query`：负责当前测试或测试夹具。
 def test_unauthenticated_error_precedes_invalid_query(client: TestClient) -> None:
     response = client.get("/api/submissions/?page=not-an-integer")
 
@@ -10,6 +11,7 @@ def test_unauthenticated_error_precedes_invalid_query(client: TestClient) -> Non
     assert response.json() == {"code": 401, "msg": "not logged in", "data": None}
 
 
+# 函数 `test_permission_error_precedes_secondary_filter_validation`：负责当前测试或测试夹具。
 def test_permission_error_precedes_secondary_filter_validation(client: TestClient) -> None:
     alice = client.post(
         "/api/users/",
@@ -33,6 +35,7 @@ def test_permission_error_precedes_secondary_filter_validation(client: TestClien
     assert response.json()["code"] == 403
 
 
+# 函数 `test_nested_extra_problem_field_is_rejected`：负责当前测试或测试夹具。
 def test_nested_extra_problem_field_is_rejected(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -45,6 +48,7 @@ def test_nested_extra_problem_field_is_rejected(
     assert response.json()["data"] is None
 
 
+# 函数 `test_language_command_requires_placeholder`：负责当前测试或测试夹具。
 def test_language_command_requires_placeholder(admin_client: TestClient) -> None:
     no_source = admin_client.post(
         "/api/languages/",

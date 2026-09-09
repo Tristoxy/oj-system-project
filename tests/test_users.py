@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 
 
+# 函数 `test_register_login_logout`：负责当前测试或测试夹具。
 def test_register_login_logout(client: TestClient) -> None:
     registered = client.post(
         "/api/users/",
@@ -22,6 +23,7 @@ def test_register_login_logout(client: TestClient) -> None:
     assert client.get(f"/api/users/{user_id}").status_code == 401
 
 
+# 函数 `test_admin_can_ban_user`：负责当前测试或测试夹具。
 def test_admin_can_ban_user(admin_client: TestClient) -> None:
     registered = admin_client.post(
         "/api/users/",
@@ -39,6 +41,7 @@ def test_admin_can_ban_user(admin_client: TestClient) -> None:
     assert denied.status_code == 403
 
 
+# 函数 `test_user_cannot_read_another_user`：负责当前测试或测试夹具。
 def test_user_cannot_read_another_user(client: TestClient) -> None:
     first = client.post("/api/users/", json={"username": "alice", "password": "secret1"})
     second = client.post("/api/users/", json={"username": "bobby", "password": "secret2"})
@@ -49,6 +52,7 @@ def test_user_cannot_read_another_user(client: TestClient) -> None:
     assert response.status_code == 403
 
 
+# 函数 `test_banned_user_with_existing_session_gets_403`：负责当前测试或测试夹具。
 def test_banned_user_with_existing_session_gets_403(client: TestClient) -> None:
     registered = client.post(
         "/api/users/",

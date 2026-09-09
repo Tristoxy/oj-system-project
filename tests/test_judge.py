@@ -15,21 +15,24 @@ from app.models.language import Language
 from app.models.problem import Problem
 
 
+# 函数 `wait_for_result`：负责当前测试或测试夹具。
 def wait_for_result(client: TestClient, submission_id: str, timeout: float = 10) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         response = client.get(f"/api/submissions/{submission_id}")
         data = response.json()["data"]
         if "score" in data or data.get("status") == "error":
-            return data
+            return {"score": data.get("score", 0), "counts": data.get("counts", 0)}
         time.sleep(0.02)
     raise AssertionError("submission did not finish")
 
 
+# 函数 `add_problem`：负责当前测试或测试夹具。
 def add_problem(client: TestClient, payload: dict[str, object]) -> None:
     assert client.post("/api/problems/", json=payload).status_code == 200
 
 
+# 函数 `test_python_ac_and_wa`：负责当前测试或测试夹具。
 def test_python_ac_and_wa(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -58,6 +61,7 @@ def test_python_ac_and_wa(
     assert log["details"][0]["result"] == "AC"
 
 
+# 函数 `test_cpp_judging`：负责当前测试或测试夹具。
 def test_cpp_judging(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -76,13 +80,21 @@ def test_cpp_judging(
         "score": 10,
         "counts": 10,
     }
+    detail = admin_client.get(f"/api/submissions/{submission_id}").json()["data"]
+    assert detail["submission_id"] == submission_id
+    assert detail["status"] == "success"
+    assert detail["compile_info"] == {"result": "success", "message": ""}
+    assert detail["run_info"]["result"] == "finished"
+    assert detail["error_info"] == ""
 
 
+# 函数 `test_submission_list_requires_primary_filter`：负责当前测试或测试夹具。
 def test_submission_list_requires_primary_filter(admin_client: TestClient) -> None:
     response = admin_client.get("/api/submissions/")
     assert response.status_code == 400
 
 
+# 函数 `test_time_limit_is_reported_in_log`：负责当前测试或测试夹具。
 def test_time_limit_is_reported_in_log(admin_client: TestClient) -> None:
     payload = {
         "id": "spin",
@@ -108,6 +120,7 @@ def test_time_limit_is_reported_in_log(admin_client: TestClient) -> None:
     assert detail["details"][0]["result"] == "TLE"
 
 
+# 函数 `test_runtime_compile_and_memory_failures_are_case_results`：负责当前测试或测试夹具。
 def test_runtime_compile_and_memory_failures_are_case_results(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -131,6 +144,7 @@ def test_runtime_compile_and_memory_failures_are_case_results(
         assert log["details"][0]["result"] == expected
 
 
+# 函数 `test_submission_rate_limit_precedes_missing_resource`：负责当前测试或测试夹具。
 def test_submission_rate_limit_precedes_missing_resource(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -149,6 +163,7 @@ def test_submission_rate_limit_precedes_missing_resource(
     assert response.json()["code"] == 429
 
 
+# 函数 `test_submission_filters_pagination_and_rejudge`：负责当前测试或测试夹具。
 def test_submission_filters_pagination_and_rejudge(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -175,6 +190,7 @@ def test_submission_filters_pagination_and_rejudge(
     assert wait_for_result(admin_client, ids[1]) == {"score": 0, "counts": 10}
 
 
+# 函数 `test_user_statistics_count_unique_solved_problems`：负责当前测试或测试夹具。
 def test_user_statistics_count_unique_solved_problems(admin_client: TestClient) -> None:
     for problem_id in ("one", "two"):
         payload = {
@@ -201,6 +217,7 @@ def test_user_statistics_count_unique_solved_problems(admin_client: TestClient) 
     assert user["resolve_count"] == 2
 
 
+# 函数 `test_excessive_output_is_stopped`：负责当前测试或测试夹具。
 def test_excessive_output_is_stopped(admin_client: TestClient) -> None:
     payload = {
         "id": "output_limit",
@@ -230,6 +247,7 @@ def test_excessive_output_is_stopped(admin_client: TestClient) -> None:
     assert log["details"][0]["result"] == "UNK"
 
 
+# 函数 `test_rejudge_updates_user_statistics_while_pending`：负责当前测试或测试夹具。
 def test_rejudge_updates_user_statistics_while_pending(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -247,6 +265,7 @@ def test_rejudge_updates_user_statistics_while_pending(
     runner = admin_client.app.state.container.runner
     original_judge = runner.judge
 
+    # 函数 `delayed_judge`：负责当前测试或测试夹具。
     async def delayed_judge(*args, **kwargs):
         await asyncio.sleep(0.2)
         return await original_judge(*args, **kwargs)
@@ -259,6 +278,7 @@ def test_rejudge_updates_user_statistics_while_pending(
     assert wait_for_result(admin_client, submission_id) == {"score": 10, "counts": 10}
 
 
+# 函数 `test_standard_and_strict_output_modes`：负责当前测试或测试夹具。
 def test_standard_and_strict_output_modes(admin_client: TestClient) -> None:
     base = {
         "title": "Output comparison",
@@ -289,6 +309,7 @@ def test_standard_and_strict_output_modes(admin_client: TestClient) -> None:
     assert strict_log["details"][0]["result"] == "WA"
 
 
+# 函数 `test_dynamically_registered_language_executes`：负责当前测试或测试夹具。
 def test_dynamically_registered_language_executes(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -325,6 +346,7 @@ def test_dynamically_registered_language_executes(
     }
 
 
+# 函数 `test_completed_submission_is_not_changed_when_problem_is_edited`：负责当前测试或测试夹具。
 def test_completed_submission_is_not_changed_when_problem_is_edited(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -344,11 +366,14 @@ def test_completed_submission_is_not_changed_when_problem_is_edited(
         json={"testcases": [{"input": "", "output": "4"}]},
     ).status_code == 200
 
-    # Editing has no implicit rejudge side effect.  A later submission uses the
-    # new cases, while the already completed record remains exactly as judged.
-    assert admin_client.get(
+    # 编辑题目不会隐式重判；后续提交使用新测试点，已完成记录保持原判定结果。
+    unchanged = admin_client.get(
         f"/api/submissions/{original['submission_id']}"
-    ).json()["data"] == {"score": 10, "counts": 10}
+    ).json()["data"]
+    assert {"score": unchanged["score"], "counts": unchanged["counts"]} == {
+        "score": 10,
+        "counts": 10,
+    }
     later = admin_client.post(
         "/api/submissions/",
         json={"problem_id": "sum_2", "language": "python", "code": "print(3)"},
@@ -358,8 +383,7 @@ def test_completed_submission_is_not_changed_when_problem_is_edited(
         "counts": 10,
     }
 
-    # Explicit administrator rejudge is the only operation that refreshes the
-    # snapshot, so the original source is now judged against the edited case.
+    # 只有管理员显式重判才会刷新快照，因此原代码此时按修改后的测试点判定。
     rejudge = admin_client.put(
         f"/api/submissions/{original['submission_id']}/rejudge"
     )
@@ -370,6 +394,7 @@ def test_completed_submission_is_not_changed_when_problem_is_edited(
     }
 
 
+# 函数 `test_pending_submission_uses_creation_time_judge_snapshot`：负责当前测试或测试夹具。
 def test_pending_submission_uses_creation_time_judge_snapshot(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -390,14 +415,18 @@ def test_pending_submission_uses_creation_time_judge_snapshot(
         json={"testcases": [{"input": "", "output": "4"}]},
     ).status_code == 200
 
-    # Execute the deliberately paused task on the app's own event loop.  It
-    # must still use the configuration captured when the submission was made.
+    # 在应用自身事件循环中执行故意暂停的任务，并确认它仍使用提交时保存的配置。
     admin_client.portal.call(service._evaluate, queued["submission_id"])
-    assert admin_client.get(
+    result = admin_client.get(
         f"/api/submissions/{queued['submission_id']}"
-    ).json()["data"] == {"score": 10, "counts": 10}
+    ).json()["data"]
+    assert {"score": result["score"], "counts": result["counts"]} == {
+        "score": 10,
+        "counts": 10,
+    }
 
 
+# 函数 `test_resource_limit_priority_is_resolved_per_field`：负责当前测试或测试夹具。
 @pytest.mark.parametrize(
     ("problem_time", "problem_memory", "language_time", "language_memory", "expected"),
     [
@@ -433,6 +462,7 @@ def test_resource_limit_priority_is_resolved_per_field(
     assert JudgeRunner._resolve_limits(problem, language) == expected
 
 
+# 函数 `test_windows_compatible_process_completion_without_sigkill`：负责当前测试或测试夹具。
 def test_windows_compatible_process_completion_without_sigkill(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -443,6 +473,7 @@ def test_windows_compatible_process_completion_without_sigkill(
     assert JudgeRunner._is_killed_returncode(137) is True
 
 
+# 函数 `test_missing_python3_uses_current_interpreter`：负责当前测试或测试夹具。
 def test_missing_python3_uses_current_interpreter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -454,6 +485,7 @@ def test_missing_python3_uses_current_interpreter(
     language = Language(name="python", file_ext=".py", run_cmd="python3 {src}")
     original_which = __import__("shutil").which
 
+    # 函数 `without_python3`：负责当前测试或测试夹具。
     def without_python3(command: str):
         return None if command == "python3" else original_which(command)
 

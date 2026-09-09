@@ -54,6 +54,6 @@ socket 等价于宿主 root 权限。超时、输出洪泛、任务取消或监�
 ## 已知边界
 
 - JSON 文件锁只保证单个 API 进程内的一致性；不要用多个 Uvicorn worker 共享同一目录。
-- Docker 镜像应定期更新并在课程 Linux 环境预先构建。
+- Docker 镜像应定期更新；如需演示隔离判题，可在 Docker Desktop、WSL 或 Linux 环境预先构建。
 - 静态 SPJ 检查不能替代沙箱；运行不可信 SPJ 时必须启用 Docker。
 - 当前系统面向课程实验，不包含 HTTPS 终止、CSRF token、分布式队列或数据库级事务。

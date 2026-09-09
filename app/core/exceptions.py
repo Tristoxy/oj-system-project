@@ -15,19 +15,23 @@ logger = logging.getLogger(__name__)
 class ApiError(Exception):
     """An expected application error that should become a JSON response."""
 
+    # 函数 `__init__`：负责当前模块中的对应操作。
     def __init__(self, status_code: int, message: str) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.message = message
 
 
+# 函数 `error_content`：负责当前模块中的对应操作。
 def error_content(status_code: int, message: str, data: Any = None) -> dict[str, Any]:
     return {"code": status_code, "msg": message, "data": data}
 
 
+# 函数 `register_exception_handlers`：负责当前模块中的对应操作。
 def register_exception_handlers(app: FastAPI) -> None:
     """Install handlers that keep every error response in the same format."""
 
+    # 函数 `handle_api_error`：负责当前模块中的对应操作。
     @app.exception_handler(ApiError)
     async def handle_api_error(request: Request, exc: ApiError) -> JSONResponse:
         del request
@@ -36,6 +40,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=error_content(exc.status_code, exc.message),
         )
 
+    # 函数 `handle_validation_error`：负责当前模块中的对应操作。
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(
         request: Request,
@@ -50,6 +55,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             ),
         )
 
+    # 函数 `handle_http_error`：负责当前模块中的对应操作。
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_error(
         request: Request,
@@ -63,6 +69,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             headers=exc.headers,
         )
 
+    # 函数 `handle_unexpected_error`：负责当前模块中的对应操作。
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         logger.error(

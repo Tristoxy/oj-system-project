@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
+# 函数 `test_health_check`：负责当前测试或测试夹具。
 def test_health_check() -> None:
     client = TestClient(create_app())
     response = client.get("/health")
@@ -17,6 +18,7 @@ def test_health_check() -> None:
     }
 
 
+# 函数 `test_framework_errors_use_course_response_format`：负责当前测试或测试夹具。
 def test_framework_errors_use_course_response_format() -> None:
     client = TestClient(create_app())
 

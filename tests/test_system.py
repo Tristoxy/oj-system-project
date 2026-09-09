@@ -10,6 +10,7 @@ from app.api import system as system_api
 from tests.test_judge import wait_for_result
 
 
+# 函数 `test_export_reset_and_import`：负责当前测试或测试夹具。
 def test_export_reset_and_import(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -43,6 +44,7 @@ def test_export_reset_and_import(
     assert len(admin_client.get("/api/problems/").json()["data"]) == 1
 
 
+# 函数 `test_import_rejects_malformed_password_hash`：负责当前测试或测试夹具。
 def test_import_rejects_malformed_password_hash(admin_client: TestClient) -> None:
     bundle = admin_client.get("/api/export/").json()["data"]
     bundle["users"][0]["password"] = "pbkdf2_sha256$999999999$bad$bad"
@@ -56,6 +58,7 @@ def test_import_rejects_malformed_password_hash(admin_client: TestClient) -> Non
     assert response.json()["code"] == 400
 
 
+# 函数 `test_invalid_import_does_not_change_state_or_session`：负责当前测试或测试夹具。
 def test_invalid_import_does_not_change_state_or_session(
     admin_client: TestClient,
 ) -> None:
@@ -75,6 +78,7 @@ def test_invalid_import_does_not_change_state_or_session(
     assert len(still_logged_in.json()["data"]["users"]) == 1
 
 
+# 函数 `test_import_rejects_broken_submission_reference`：负责当前测试或测试夹具。
 def test_import_rejects_broken_submission_reference(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -105,6 +109,7 @@ def test_import_rejects_broken_submission_reference(
     assert response.json()["code"] == 400
 
 
+# 函数 `test_export_matches_official_submission_shape_and_round_trips`：负责当前测试或测试夹具。
 def test_export_matches_official_submission_shape_and_round_trips(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -140,11 +145,16 @@ def test_export_matches_official_submission_shape_and_round_trips(
         "/api/auth/login",
         json={"username": "admin", "password": "admintestpassword"},
     )
-    assert admin_client.get(
+    restored = admin_client.get(
         f"/api/submissions/{submitted['submission_id']}"
-    ).json()["data"] == {"score": 10, "counts": 10}
+    ).json()["data"]
+    assert {"score": restored["score"], "counts": restored["counts"]} == {
+        "score": 10,
+        "counts": 10,
+    }
 
 
+# 函数 `test_import_size_limit_is_checked_before_json_parsing`：负责当前测试或测试夹具。
 def test_import_size_limit_is_checked_before_json_parsing(
     admin_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -160,6 +170,7 @@ def test_import_size_limit_is_checked_before_json_parsing(
     assert response.json()["msg"] == "import file is too large"
 
 
+# 函数 `test_user_listing_handles_mixed_imported_ids`：负责当前测试或测试夹具。
 def test_user_listing_handles_mixed_imported_ids(admin_client: TestClient) -> None:
     bundle = admin_client.get("/api/export/").json()["data"]
     imported_user = dict(bundle["users"][0])
@@ -183,6 +194,7 @@ def test_user_listing_handles_mixed_imported_ids(admin_client: TestClient) -> No
     ]
 
 
+# 函数 `test_import_resumes_all_background_workers`：负责当前测试或测试夹具。
 def test_import_resumes_all_background_workers(
     admin_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -204,6 +216,7 @@ def test_import_resumes_all_background_workers(
     resume_plagiarism.assert_awaited_once()
 
 
+# 函数 `test_failed_import_after_pause_still_resumes_workers`：负责当前测试或测试夹具。
 def test_failed_import_after_pause_still_resumes_workers(
     admin_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -230,6 +243,7 @@ def test_failed_import_after_pause_still_resumes_workers(
     resume_plagiarism.assert_awaited_once()
 
 
+# 函数 `test_import_rejects_naive_submission_timestamp`：负责当前测试或测试夹具。
 def test_import_rejects_naive_submission_timestamp(
     admin_client: TestClient,
     problem_payload: dict[str, object],

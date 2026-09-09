@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from tests.test_judge import wait_for_result
 
 
+# 函数 `login`：负责当前测试或测试夹具。
 def login(client: TestClient, username: str, password: str) -> None:
     response = client.post(
         "/api/auth/login",
@@ -13,6 +14,7 @@ def login(client: TestClient, username: str, password: str) -> None:
     assert response.status_code == 200
 
 
+# 函数 `test_private_and_public_log_visibility_is_audited`：负责当前测试或测试夹具。
 def test_private_and_public_log_visibility_is_audited(
     admin_client: TestClient,
     problem_payload: dict[str, object],

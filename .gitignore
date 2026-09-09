@@ -9,3 +9,5 @@ htmlcov/
 data/
 temp/
 .streamlit/
+
+note.md

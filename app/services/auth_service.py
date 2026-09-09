@@ -11,10 +11,13 @@ from app.repositories.state_store import StateStore
 
 
 class AuthService:
+    # 函数 `__init__`：负责当前模块中的对应操作。
     def __init__(self, store: StateStore) -> None:
         self.store = store
 
+    # 函数 `login`：负责当前模块中的对应操作。
     async def login(self, credentials: Credentials) -> tuple[User, str]:
+        # 函数 `create_session`：负责当前模块中的对应操作。
         def create_session(state):
             raw = next(
                 (user for user in state["users"] if user["username"] == credentials.username),
@@ -38,7 +41,9 @@ class AuthService:
 
         return await self.store.mutate(create_session)
 
+    # 函数 `logout`：负责当前模块中的对应操作。
     async def logout(self, session_id: str) -> None:
+        # 函数 `remove`：负责当前模块中的对应操作。
         def remove(state):
             before = len(state["sessions"])
             state["sessions"] = [
@@ -49,6 +54,7 @@ class AuthService:
 
         await self.store.mutate(remove)
 
+    # 函数 `current_user`：负责当前模块中的对应操作。
     async def current_user(self, session_id: str | None) -> User:
         if not session_id:
             raise ApiError(401, "not logged in")

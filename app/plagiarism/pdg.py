@@ -11,17 +11,20 @@ from collections import Counter
 from typing import Any
 
 
+# 函数 `build_pdg`：负责当前模块中的对应操作。
 def build_pdg(code: str, language: str) -> dict[str, Any]:
     if language == "python":
         return _build_python_pdg(code)
     return _build_token_pdg(code)
 
 
+# 函数 `graph_similarity`：负责当前模块中的对应操作。
 def graph_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     left_nodes = Counter(node["label"] for node in left.get("nodes", []))
     right_nodes = Counter(node["label"] for node in right.get("nodes", []))
     node_score = _multiset_jaccard(left_nodes, right_nodes)
 
+    # 函数 `edge_features`：负责当前模块中的对应操作。
     def edge_features(graph):
         labels = {node["id"]: node["label"] for node in graph.get("nodes", [])}
         return Counter(
@@ -36,6 +39,7 @@ def graph_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     return round(0.55 * node_score + 0.30 * edge_score + 0.15 * sequence_score, 4)
 
 
+# 函数 `map_similar_nodes`：负责当前模块中的对应操作。
 def map_similar_nodes(
     left: dict[str, Any],
     right: dict[str, Any],
@@ -68,11 +72,13 @@ def map_similar_nodes(
     return mapping
 
 
+# 函数 `_multiset_jaccard`：负责当前模块中的对应操作。
 def _multiset_jaccard(left: Counter, right: Counter) -> float:
     union = sum((left | right).values())
     return 1.0 if union == 0 else sum((left & right).values()) / union
 
 
+# 函数 `_build_python_pdg`：负责当前模块中的对应操作。
 def _build_python_pdg(code: str) -> dict[str, Any]:
     try:
         tree = ast.parse(code)
@@ -85,6 +91,7 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
     definitions: dict[int, set[str]] = {}
     uses: dict[int, set[str]] = {}
 
+    # 函数 `add_node`：负责当前模块中的对应操作。
     def add_node(statement: ast.stmt) -> int:
         node_id = len(nodes)
         header = _statement_header(statement)
@@ -102,6 +109,7 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
         uses[node_id] = loads
         return node_id
 
+    # 函数 `build_block`：负责当前模块中的对应操作。
     def build_block(
         statements: list[ast.stmt],
         incoming: set[int],
@@ -165,8 +173,7 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
                 statement,
                 (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef),
             ):
-                # Nested scopes belong in the analysis graph but are not
-                # executed while the definition statement itself is evaluated.
+                # 嵌套作用域属于分析图，但计算定义语句本身时不会执行其中内容。
                 build_block(statement.body, {node_id}, node_id)
                 exits = {node_id}
             elif isinstance(statement, (ast.Return, ast.Raise)):
@@ -193,6 +200,7 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
     return {"language": "python", "nodes": nodes, "edges": edges}
 
 
+# 函数 `_reaching_definition_edges`：负责当前模块中的对应操作。
 def _reaching_definition_edges(
     node_count: int,
     flow_edges: set[tuple[int, int]],
@@ -237,6 +245,7 @@ def _reaching_definition_edges(
     }
 
 
+# 函数 `_statement_header`：负责当前模块中的对应操作。
 def _statement_header(node: ast.stmt) -> ast.stmt:
     """Return a copy without nested blocks for one statement-level CFG node."""
     header = copy.deepcopy(node)
@@ -251,14 +260,18 @@ def _statement_header(node: ast.stmt) -> ast.stmt:
     return header
 
 
+# 函数 `_normalized_ast_label`：负责当前模块中的对应操作。
 def _normalized_ast_label(node: ast.AST) -> str:
     class Normalizer(ast.NodeTransformer):
+        # 函数 `visit_Name`：负责当前模块中的对应操作。
         def visit_Name(self, item: ast.Name):
             return ast.copy_location(ast.Name(id="VAR", ctx=item.ctx), item)
 
+        # 函数 `visit_arg`：负责当前模块中的对应操作。
         def visit_arg(self, item: ast.arg):
             return ast.copy_location(ast.arg(arg="ARG", annotation=None), item)
 
+        # 函数 `visit_Constant`：负责当前模块中的对应操作。
         def visit_Constant(self, item: ast.Constant):
             kind = type(item.value).__name__
             return ast.copy_location(ast.Constant(value=f"<{kind}>"), item)
@@ -267,6 +280,7 @@ def _normalized_ast_label(node: ast.AST) -> str:
     return ast.dump(normalized, annotate_fields=False, include_attributes=False)
 
 
+# 函数 `_names`：负责当前模块中的对应操作。
 def _names(node: ast.AST) -> tuple[set[str], set[str]]:
     loads: set[str] = set()
     stores: set[str] = set()
@@ -279,6 +293,7 @@ def _names(node: ast.AST) -> tuple[set[str], set[str]]:
     return loads, stores
 
 
+# 函数 `_build_token_pdg`：负责当前模块中的对应操作。
 def _build_token_pdg(code: str) -> dict[str, Any]:
     normalized: list[str] = []
     try:

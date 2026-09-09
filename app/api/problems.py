@@ -20,6 +20,7 @@ class VisibilityUpdate(BaseModel):
     public_cases: bool = False
 
 
+# 函数 `list_problems`：负责当前模块中的对应操作。
 @router.get("/")
 async def list_problems(
     current_user: User = Depends(get_current_user),
@@ -30,6 +31,7 @@ async def list_problems(
     return success_response(problems)
 
 
+# 函数 `add_problem`：负责当前模块中的对应操作。
 @router.post("/", status_code=status.HTTP_200_OK)
 async def add_problem(
     problem: ProblemCreate,
@@ -41,6 +43,7 @@ async def add_problem(
     return success_response({"id": created.id}, msg="add success")
 
 
+# 函数 `get_problem`：负责当前模块中的对应操作。
 @router.get("/{problem_id}")
 async def get_problem(
     problem_id: Annotated[str, Path(min_length=1, pattern=PROBLEM_ID_PATTERN)],
@@ -52,6 +55,7 @@ async def get_problem(
     return success_response(problem.model_dump(mode="json"))
 
 
+# 函数 `update_problem`：负责当前模块中的对应操作。
 @router.put("/{problem_id}")
 async def update_problem(
     problem_id: Annotated[str, Path(min_length=1, pattern=PROBLEM_ID_PATTERN)],
@@ -64,6 +68,7 @@ async def update_problem(
     return success_response({"id": problem.id}, msg="update success")
 
 
+# 函数 `delete_problem`：负责当前模块中的对应操作。
 @router.delete("/{problem_id}")
 async def delete_problem(
     problem_id: Annotated[str, Path(min_length=1, pattern=PROBLEM_ID_PATTERN)],
@@ -75,6 +80,7 @@ async def delete_problem(
     return success_response({"id": problem_id}, msg="delete success")
 
 
+# 函数 `update_log_visibility`：负责当前模块中的对应操作。
 @router.put("/{problem_id}/log_visibility")
 async def update_log_visibility(
     problem_id: Annotated[str, Path(min_length=1, pattern=PROBLEM_ID_PATTERN)],
@@ -90,6 +96,7 @@ async def update_log_visibility(
     )
 
 
+# 函数 `upload_spj`：负责当前模块中的对应操作。
 @router.post("/{problem_id}/spj")
 async def upload_spj(
     problem_id: Annotated[str, Path(min_length=1, pattern=PROBLEM_ID_PATTERN)],
@@ -103,6 +110,7 @@ async def upload_spj(
     return success_response({"problem_id": problem_id}, msg="SPJ uploaded")
 
 
+# 函数 `delete_spj`：负责当前模块中的对应操作。
 @router.delete("/{problem_id}/spj")
 async def delete_spj(
     problem_id: Annotated[str, Path(min_length=1, pattern=PROBLEM_ID_PATTERN)],

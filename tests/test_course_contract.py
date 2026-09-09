@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 
 
+# 函数 `_register`：负责当前测试或测试夹具。
 def _register(client: TestClient, username: str) -> dict[str, object]:
     response = client.post(
         "/api/users/",
@@ -12,6 +13,7 @@ def _register(client: TestClient, username: str) -> dict[str, object]:
     return response.json()["data"]
 
 
+# 函数 `test_non_admin_permission_matrix`：负责当前测试或测试夹具。
 def test_non_admin_permission_matrix(
     client: TestClient,
     problem_payload: dict[str, object],
@@ -23,8 +25,7 @@ def test_non_admin_permission_matrix(
         json={"username": "alice", "password": "secret1"},
     ).status_code == 200
 
-    # The course explicitly allows every logged-in user to add problems and
-    # languages, while destructive and administrative actions remain admin-only.
+    # 课程明确允许所有登录用户新增题目和语言，删除及管理操作仍仅限管理员。
     assert client.post("/api/problems/", json=problem_payload).status_code == 200
     assert client.post(
         "/api/languages/",
@@ -35,8 +36,7 @@ def test_non_admin_permission_matrix(
         },
     ).status_code == 200
 
-    # Course-staff clarification: every logged-in user may edit a problem, and
-    # problem details shown to an ordinary user include the complete testcases.
+    # 按课程说明，所有登录用户均可编辑题目，普通用户看到的题目详情包含完整测试点。
     updated_cases = [{"input": "2 5", "output": "7"}]
     update = client.put(
         "/api/problems/sum_2",
@@ -61,6 +61,7 @@ def test_non_admin_permission_matrix(
     assert client.get(f"/api/users/{bobby['user_id']}").status_code == 403
 
 
+# 函数 `test_problem_update_cannot_change_identity_or_admin_settings`：负责当前测试或测试夹具。
 def test_problem_update_cannot_change_identity_or_admin_settings(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -76,6 +77,7 @@ def test_problem_update_cannot_change_identity_or_admin_settings(
     assert admin_client.put("/api/problems/sum_2", json={}).status_code == 400
 
 
+# 函数 `test_error_responses_always_match_http_status`：负责当前测试或测试夹具。
 def test_error_responses_always_match_http_status(client: TestClient) -> None:
     responses = (
         client.get("/api/problems/"),
@@ -91,6 +93,7 @@ def test_error_responses_always_match_http_status(client: TestClient) -> None:
         assert payload["data"] is None
 
 
+# 函数 `test_user_pagination_contract`：负责当前测试或测试夹具。
 def test_user_pagination_contract(admin_client: TestClient) -> None:
     _register(admin_client, "alice")
     _register(admin_client, "bobby")
@@ -104,6 +107,7 @@ def test_user_pagination_contract(admin_client: TestClient) -> None:
     assert admin_client.get("/api/users/?page_size=0").status_code == 400
 
 
+# 函数 `test_problem_resource_limits_are_bounded`：负责当前测试或测试夹具。
 def test_problem_resource_limits_are_bounded(
     admin_client: TestClient,
     problem_payload: dict[str, object],

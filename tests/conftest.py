@@ -9,12 +9,14 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
+# 函数 `client`：负责当前测试或测试夹具。
 @pytest.fixture
 def client(tmp_path: Path) -> Iterator[TestClient]:
     with TestClient(create_app(tmp_path / "data")) as test_client:
         yield test_client
 
 
+# 函数 `admin_client`：负责当前测试或测试夹具。
 @pytest.fixture
 def admin_client(client: TestClient) -> TestClient:
     response = client.post(
@@ -25,6 +27,7 @@ def admin_client(client: TestClient) -> TestClient:
     return client
 
 
+# 函数 `problem_payload`：负责当前测试或测试夹具。
 @pytest.fixture
 def problem_payload() -> dict[str, object]:
     return {

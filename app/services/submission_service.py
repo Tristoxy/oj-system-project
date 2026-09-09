@@ -21,14 +21,17 @@ logger = logging.getLogger(__name__)
 
 
 class SubmissionService:
+    # 函数 `__init__`：负责当前模块中的对应操作。
     def __init__(self, store: StateStore, runner: JudgeRunner) -> None:
         self.store = store
         self.runner = runner
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
+    # 函数 `submit`：负责当前模块中的对应操作。
     async def submit(self, payload: SubmissionCreate, user: User) -> Submission:
         now = datetime.now(timezone.utc)
 
+        # 函数 `create`：负责当前模块中的对应操作。
         def create(state):
             cutoff = now - timedelta(seconds=SUBMISSION_RATE_WINDOW_SECONDS)
             recent = 0
@@ -76,6 +79,7 @@ class SubmissionService:
         await self._schedule(submission.submission_id)
         return submission
 
+    # 函数 `get_submission`：负责当前模块中的对应操作。
     async def get_submission(self, submission_id: str) -> Submission:
         state = await self.store.read()
         raw = next(
@@ -86,14 +90,27 @@ class SubmissionService:
             raise ApiError(404, "submission not found")
         return Submission.model_validate(raw)
 
+    # 函数 `result_for`：负责当前模块中的对应操作。
     async def result_for(self, submission_id: str, user: User) -> dict[str, object]:
         submission = await self.get_submission(submission_id)
         if user.role != "admin" and submission.user_id != user.user_id:
             raise ApiError(403, "permission denied")
-        if submission.status != "success":
-            return {"submission_id": submission.submission_id, "status": submission.status}
-        return {"score": submission.score, "counts": submission.counts}
+        data: dict[str, object] = {
+            "submission_id": submission.submission_id,
+            "status": submission.status,
+        }
+        if submission.status == "pending":
+            return data
+        data.update(
+            score=submission.score,
+            counts=submission.counts,
+            compile_info=submission.compile_info,
+            run_info=submission.run_info,
+            error_info=submission.error_info,
+        )
+        return data
 
+    # 函数 `list_submissions`：负责当前模块中的对应操作。
     async def list_submissions(
         self,
         user: User,
@@ -132,7 +149,9 @@ class SubmissionService:
             result.append(summary)
         return {"total": total, "submissions": result}
 
+    # 函数 `rejudge`：负责当前模块中的对应操作。
     async def rejudge(self, submission_id: str) -> Submission:
+        # 函数 `reset`：负责当前模块中的对应操作。
         def reset(state):
             for item in state["submissions"]:
                 if item["submission_id"] == submission_id:
@@ -161,6 +180,9 @@ class SubmissionService:
                         details=[],
                         score=0,
                         counts=len(problem.get("testcases", [])) * 10,
+                        compile_info=None,
+                        run_info=None,
+                        error_info="",
                         judge_snapshot=JudgeSnapshot(
                             problem=Problem.model_validate(problem),
                             language=Language.model_validate(language),
@@ -174,12 +196,14 @@ class SubmissionService:
         await self._schedule(submission_id)
         return submission
 
+    # 函数 `resume_pending`：负责当前模块中的对应操作。
     async def resume_pending(self) -> None:
         state = await self.store.read()
         for item in state["submissions"]:
             if item.get("status") == "pending":
                 await self._schedule(str(item["submission_id"]))
 
+    # 函数 `shutdown`：负责当前模块中的对应操作。
     async def shutdown(self) -> None:
         tasks = list(self._tasks.values())
         self._tasks.clear()
@@ -188,6 +212,7 @@ class SubmissionService:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    # 函数 `wait`：负责当前模块中的对应操作。
     async def wait(self, submission_id: str, timeout: float = 10) -> Submission:
         deadline = asyncio.get_running_loop().time() + timeout
         while asyncio.get_running_loop().time() < deadline:
@@ -197,6 +222,7 @@ class SubmissionService:
             await asyncio.sleep(0.02)
         raise TimeoutError(f"submission {submission_id} did not finish")
 
+    # 函数 `_schedule`：负责当前模块中的对应操作。
     async def _schedule(self, submission_id: str) -> None:
         previous = self._tasks.get(submission_id)
         if previous is not None and not previous.done():
@@ -205,12 +231,14 @@ class SubmissionService:
         task = asyncio.create_task(self._evaluate(submission_id))
         self._tasks[submission_id] = task
 
+        # 函数 `remove`：负责当前模块中的对应操作。
         def remove(done: asyncio.Task[None]) -> None:
             if self._tasks.get(submission_id) is done:
                 self._tasks.pop(submission_id, None)
 
         task.add_done_callback(remove)
 
+    # 函数 `_evaluate`：负责当前模块中的对应操作。
     async def _evaluate(self, submission_id: str) -> None:
         try:
             state = await self.store.read()
@@ -237,7 +265,25 @@ class SubmissionService:
             details = await self.runner.judge(submission.code, language, problem)
             score = sum(10 for detail in details if detail.result == "AC")
             pdg = submission.pdg or build_pdg(submission.code, submission.language)
+            compilation_failed = bool(details) and all(
+                detail.result == "CE" for detail in details
+            )
+            compile_info = None
+            if language.compile_cmd:
+                compile_info = {
+                    "result": "error" if compilation_failed else "success",
+                    "message": "compilation failed" if compilation_failed else "",
+                }
+            run_info = {
+                "result": "not_started" if compilation_failed else "finished",
+                "message": (
+                    "program was not run because compilation failed"
+                    if compilation_failed
+                    else f"{len(details)} test cases finished"
+                ),
+            }
 
+            # 函数 `finish`：负责当前模块中的对应操作。
             def finish(current):
                 for item in current["submissions"]:
                     if item["submission_id"] == submission_id:
@@ -247,6 +293,9 @@ class SubmissionService:
                             score=score,
                             counts=len(problem.testcases) * 10,
                             pdg=pdg,
+                            compile_info=compile_info,
+                            run_info=run_info,
+                            error_info="",
                         )
                         break
                 recompute_user_stats(current)
@@ -255,10 +304,19 @@ class SubmissionService:
         except Exception:
             logger.exception("Evaluation failed for submission %s", submission_id)
 
+            # 函数 `fail`：负责当前模块中的对应操作。
             def fail(state):
                 for item in state["submissions"]:
                     if item["submission_id"] == submission_id:
-                        item["status"] = "error"
+                        item.update(
+                            status="error",
+                            compile_info=None,
+                            run_info={
+                                "result": "error",
+                                "message": "judge task failed",
+                            },
+                            error_info="judge task failed; check server logs",
+                        )
                         break
                 recompute_user_stats(state)
 

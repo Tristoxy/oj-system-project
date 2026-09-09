@@ -12,6 +12,7 @@ from app.models.user import Credentials, RoleUpdate, User
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
+# 函数 `register_user`：负责当前模块中的对应操作。
 @router.post("/")
 async def register_user(
     payload: Credentials,
@@ -21,6 +22,7 @@ async def register_user(
     return success_response(user.public(), msg="register success")
 
 
+# 函数 `create_admin`：负责当前模块中的对应操作。
 @router.post("/admin")
 async def create_admin(
     payload: Credentials,
@@ -32,6 +34,7 @@ async def create_admin(
     return success_response({"user_id": user.user_id, "username": user.username})
 
 
+# 函数 `list_users`：负责当前模块中的对应操作。
 @router.get("/")
 async def list_users(
     page: int | None = Query(default=None),
@@ -43,6 +46,7 @@ async def list_users(
     return success_response(await container.users.list_users(page, page_size))
 
 
+# 函数 `get_user`：负责当前模块中的对应操作。
 @router.get("/{user_id}")
 async def get_user(
     user_id: str,
@@ -55,6 +59,7 @@ async def get_user(
     return success_response(user.public())
 
 
+# 函数 `update_role`：负责当前模块中的对应操作。
 @router.put("/{user_id}/role")
 async def update_role(
     user_id: str,

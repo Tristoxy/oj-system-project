@@ -26,6 +26,7 @@ ALLOWED_EXECUTABLES = {
 FORBIDDEN_SHELL_TOKENS = {";", "&&", "||", "|", ">", "<", "`", "$", "\n", "\r"}
 
 
+# 函数 `hash_password`：负责当前模块中的对应操作。
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac(
@@ -44,6 +45,7 @@ def hash_password(password: str) -> str:
     )
 
 
+# 函数 `verify_password`：负责当前模块中的对应操作。
 def verify_password(password: str, encoded: str) -> bool:
     try:
         algorithm, iterations_text, salt_text, expected_text = encoded.split("$", 3)
@@ -67,6 +69,7 @@ def verify_password(password: str, encoded: str) -> bool:
         return False
 
 
+# 函数 `is_password_hash`：负责当前模块中的对应操作。
 def is_password_hash(encoded: str) -> bool:
     """Validate an imported hash without doing an expensive password check."""
     try:
@@ -84,6 +87,7 @@ def is_password_hash(encoded: str) -> bool:
     )
 
 
+# 函数 `validate_command_template`：负责当前模块中的对应操作。
 def validate_command_template(command: str, *, require_src: bool = False) -> None:
     if any(token in command for token in FORBIDDEN_SHELL_TOKENS):
         raise ApiError(400, "unsafe language command")

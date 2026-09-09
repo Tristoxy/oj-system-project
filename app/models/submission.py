@@ -49,13 +49,16 @@ class Submission(BaseModel):
     details: list[TestCaseResult] = Field(default_factory=list)
     score: int = Field(default=0, ge=0)
     counts: int = Field(default=0, ge=0)
-    # The course's fixed import/export schema predates this internal field.  An
-    # imported submission without a timestamp must not count towards the
-    # one-minute rate limit, so use an old, timezone-aware default.
+    compile_info: dict[str, str] | None = None
+    run_info: dict[str, str] | None = None
+    error_info: str = ""
+    # 课程固定导入导出结构早于此内部字段；缺少时间戳的导入记录不应计入一分钟限流，
+    # 因此使用一个较早且带时区的默认时间。
     created_at: str = IMPORTED_SUBMISSION_TIME
     pdg: dict[str, object] | None = None
     judge_snapshot: JudgeSnapshot | None = None
 
+    # 函数 `validate_created_at`：负责当前模块中的对应操作。
     @field_validator("created_at")
     @classmethod
     def validate_created_at(cls, value: str) -> str:
@@ -64,6 +67,7 @@ class Submission(BaseModel):
             raise ValueError("created_at must include a timezone")
         return value
 
+    # 函数 `validate_result_totals`：负责当前模块中的对应操作。
     @model_validator(mode="after")
     def validate_result_totals(self) -> "Submission":
         if self.score > self.counts:

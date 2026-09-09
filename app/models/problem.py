@@ -62,6 +62,7 @@ class ProblemUpdate(BaseModel):
     author: str | None = None
     difficulty: str | None = None
 
+    # 函数 `require_edit`：负责当前模块中的对应操作。
     @model_validator(mode="after")
     def require_edit(self) -> "ProblemUpdate":
         if not self.model_fields_set or self.model_fields_set == {"id"}:

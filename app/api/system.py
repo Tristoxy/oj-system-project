@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api", tags=["system"])
 MAX_IMPORT_BYTES = 16 * 1024 * 1024
 
 
+# 函数 `reset_system`：负责当前模块中的对应操作。
 @router.post("/reset/")
 async def reset_system(
     response: Response,
@@ -31,6 +32,7 @@ async def reset_system(
     return success_response(None, msg="system reset successfully")
 
 
+# 函数 `export_data`：负责当前模块中的对应操作。
 @router.get("/export/")
 async def export_data(
     admin: User = Depends(require_admin),
@@ -40,6 +42,7 @@ async def export_data(
     return success_response(await container.system.export_data())
 
 
+# 函数 `import_data`：负责当前模块中的对应操作。
 @router.post("/import/")
 async def import_data(
     file: UploadFile = File(...),
@@ -62,10 +65,8 @@ async def import_data(
     try:
         await container.system.import_data(bundle)
     finally:
-        # A failed second-stage import must not strand work that was paused
-        # after validation.  Successful imports may also retain pending
-        # plagiarism tasks because the fixed course bundle does not replace
-        # that advanced-feature collection.
+        # 第二阶段导入失败时也必须恢复验证后暂停的任务。
+        # 成功导入也可能保留待处理的查重任务，因为课程固定数据包不会替换该进阶功能集合。
         await container.submissions.resume_pending()
         await container.plagiarism.resume_pending()
     return success_response(None, msg="import success")

@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 
 
+# 函数 `test_problem_management_flow`：负责当前测试或测试夹具。
 def test_problem_management_flow(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -24,8 +25,7 @@ def test_problem_management_flow(
     assert detail["id"] == "sum_2"
     assert detail["hint"] == ""
     assert detail["tags"] == []
-    # An omitted problem limit stays unset.  The judge resolves it from the
-    # selected language and finally from the system defaults at evaluation time.
+    # 未填写的题目限制保持为空，判题时依次从所选语言和系统默认配置中解析。
     assert detail["time_limit"] is None
     assert detail["memory_limit"] is None
 
@@ -41,6 +41,7 @@ def test_problem_management_flow(
     }
 
 
+# 函数 `test_duplicate_problem_id_returns_409`：负责当前测试或测试夹具。
 def test_duplicate_problem_id_returns_409(
     admin_client: TestClient,
     problem_payload: dict[str, object],
@@ -53,6 +54,7 @@ def test_duplicate_problem_id_returns_409(
     assert response.json()["code"] == 409
 
 
+# 函数 `test_invalid_problem_returns_400`：负责当前测试或测试夹具。
 def test_invalid_problem_returns_400(admin_client: TestClient) -> None:
     response = admin_client.post(
         "/api/problems/",
@@ -63,6 +65,7 @@ def test_invalid_problem_returns_400(admin_client: TestClient) -> None:
     assert response.json()["code"] == 400
 
 
+# 函数 `test_delete_missing_problem_returns_404`：负责当前测试或测试夹具。
 def test_delete_missing_problem_returns_404(admin_client: TestClient) -> None:
     response = admin_client.delete("/api/problems/not_found")
 
@@ -70,6 +73,7 @@ def test_delete_missing_problem_returns_404(admin_client: TestClient) -> None:
     assert response.json()["code"] == 404
 
 
+# 函数 `test_authentication_precedes_body_validation`：负责当前测试或测试夹具。
 def test_authentication_precedes_body_validation(client: TestClient) -> None:
     response = client.post("/api/problems/", json={})
 

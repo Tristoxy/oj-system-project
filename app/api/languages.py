@@ -12,6 +12,7 @@ from app.models.user import User
 router = APIRouter(prefix="/api/languages", tags=["languages"])
 
 
+# 函数 `list_languages`：负责当前模块中的对应操作。
 @router.get("/")
 async def list_languages(
     current_user: User = Depends(get_current_user),
@@ -21,6 +22,7 @@ async def list_languages(
     return success_response({"name": await container.languages.list_languages()})
 
 
+# 函数 `register_language`：负责当前模块中的对应操作。
 @router.post("/")
 async def register_language(
     payload: LanguageCreate,

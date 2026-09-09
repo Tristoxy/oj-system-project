@@ -8,6 +8,7 @@ from app.core.exceptions import ApiError
 T = TypeVar("T")
 
 
+# 函数 `paginate`：负责当前模块中的对应操作。
 def paginate(items: list[T], page: int | None, page_size: int | None) -> list[T]:
     if page is not None and page_size is None:
         raise ApiError(400, "page_size is required when page is provided")

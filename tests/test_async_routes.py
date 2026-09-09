@@ -17,6 +17,7 @@ from app.api import (
 )
 
 
+# 函数 `test_all_application_routes_are_async`：负责当前测试或测试夹具。
 def test_all_application_routes_are_async() -> None:
     routers = (
         auth.router,

@@ -12,6 +12,7 @@ from app.models.user import User
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
 
+# 函数 `submit_code`：负责当前模块中的对应操作。
 @router.post("/")
 async def submit_code(
     payload: SubmissionCreate,
@@ -24,6 +25,7 @@ async def submit_code(
     )
 
 
+# 函数 `list_submissions`：负责当前模块中的对应操作。
 @router.get("/")
 async def list_submissions(
     user_id: str | None = Query(default=None),
@@ -45,6 +47,7 @@ async def list_submissions(
     return success_response(data)
 
 
+# 函数 `get_submission`：负责当前模块中的对应操作。
 @router.get("/{submission_id}")
 async def get_submission(
     submission_id: str,
@@ -56,6 +59,7 @@ async def get_submission(
     )
 
 
+# 函数 `rejudge_submission`：负责当前模块中的对应操作。
 @router.put("/{submission_id}/rejudge")
 async def rejudge_submission(
     submission_id: str,

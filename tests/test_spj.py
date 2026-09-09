@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from tests.test_judge import wait_for_result
 
 
+# 函数 `test_spj_upload_execution_and_delete`：负责当前测试或测试夹具。
 def test_spj_upload_execution_and_delete(admin_client: TestClient) -> None:
     problem = {
         "id": "unordered",
@@ -48,6 +49,7 @@ raise SystemExit(0 if sorted(expected_words) == sorted(actual_words) else 1)
     assert admin_client.get("/api/problems/unordered").json()["data"]["judge_mode"] == "standard"
 
 
+# 函数 `test_spj_rejects_unsafe_script_and_wrong_extension`：负责当前测试或测试夹具。
 def test_spj_rejects_unsafe_script_and_wrong_extension(
     admin_client: TestClient,
     problem_payload: dict[str, object],

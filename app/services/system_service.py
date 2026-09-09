@@ -34,12 +34,15 @@ DEFAULT_LANGUAGES = [
 
 
 class SystemService:
+    # 函数 `__init__`：负责当前模块中的对应操作。
     def __init__(self, store: StateStore) -> None:
         self.store = store
 
+    # 函数 `initialize`：负责当前模块中的对应操作。
     async def initialize(self) -> None:
         await self.store.initialize()
 
+        # 函数 `add_defaults`：负责当前模块中的对应操作。
         def add_defaults(state):
             if not any(user.get("username") == "admin" for user in state["users"]):
                 state["users"].append(self._initial_admin().model_dump(mode="json"))
@@ -50,11 +53,13 @@ class SystemService:
 
         await self.store.mutate(add_defaults)
 
+    # 函数 `reset`：负责当前模块中的对应操作。
     async def reset(self) -> None:
         await self.store.replace(empty_state())
         await self.store.clear_files()
         await self.initialize()
 
+    # 函数 `export_data`：负责当前模块中的对应操作。
     async def export_data(self) -> dict[str, object]:
         state = await self.store.read()
         recompute_user_stats(state)
@@ -65,13 +70,22 @@ class SystemService:
         submissions = [
             Submission.model_validate(item).model_dump(
                 mode="json",
-                exclude={"created_at", "pdg", "judge_snapshot"},
+                exclude={
+                    "created_at",
+                    "pdg",
+                    "judge_snapshot",
+                    "compile_info",
+                    "run_info",
+                    "error_info",
+                },
             )
             for item in state["submissions"]
         ]
         return {"users": users, "problems": problems, "submissions": submissions}
 
+    # 函数 `import_data`：负责当前模块中的对应操作。
     async def import_data(self, bundle: ImportBundle) -> None:
+        # 函数 `merge`：负责当前模块中的对应操作。
         def merge(state):
             self._validate_import_against_state(bundle, state)
             imported_users = [item.model_dump(mode="json") for item in bundle.users]
@@ -89,16 +103,19 @@ class SystemService:
 
         await self.store.mutate(merge)
 
+    # 函数 `validate_import`：负责当前模块中的对应操作。
     async def validate_import(self, bundle: ImportBundle) -> None:
         """Validate completely before the caller pauses background workers."""
         state = await self.store.read()
         self._validate_import_against_state(bundle, state)
 
+    # 函数 `_validate_import_against_state`：负责当前模块中的对应操作。
     @staticmethod
     def _validate_import_against_state(
         bundle: ImportBundle,
         state: dict[str, list[dict]],
     ) -> None:
+        # 函数 `require_unique`：负责当前模块中的对应操作。
         def require_unique(values: list[str], label: str) -> None:
             if len(values) != len(set(values)):
                 raise ApiError(400, f"duplicate {label} in import data")
@@ -130,6 +147,7 @@ class SystemService:
             if submission.problem_id not in problem_ids:
                 raise ApiError(400, "submission references an unknown problem")
 
+    # 函数 `_merge`：负责当前模块中的对应操作。
     @staticmethod
     def _merge(target: list[dict], incoming: list[dict], key: str) -> None:
         indexes = {item[key]: index for index, item in enumerate(target)}
@@ -139,6 +157,7 @@ class SystemService:
             else:
                 target.append(item)
 
+    # 函数 `_initial_admin`：负责当前模块中的对应操作。
     @staticmethod
     def _initial_admin() -> User:
         return User(

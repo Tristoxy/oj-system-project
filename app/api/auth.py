@@ -12,6 +12,7 @@ from app.models.user import Credentials, User
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+# 函数 `login`：负责当前模块中的对应操作。
 @router.post("/login")
 async def login(
     payload: Credentials,
@@ -33,6 +34,7 @@ async def login(
     )
 
 
+# 函数 `logout`：负责当前模块中的对应操作。
 @router.post("/logout")
 async def logout(
     request: Request,
