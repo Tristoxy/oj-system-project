@@ -239,7 +239,15 @@ class AIProblemService:
             "Authorization": f"Bearer {config.api_key}",
             "Content-Type": "application/json",
         }
-        body = {"model": config.model, "messages": messages, "temperature": 0.3}
+        body = {
+            "model": config.model,
+            "messages": messages,
+            "temperature": 0.3,
+            # AI 命题只需要规范 JSON；关闭默认思考可减少 Token 消耗和等待时间。
+            "thinking": {"type": "disabled"},
+            "response_format": {"type": "json_object"},
+            "max_tokens": 8_000,
+        }
         timeout = httpx.Timeout(self.REQUEST_TIMEOUT_SECONDS, connect=15)
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(endpoint, headers=headers, json=body)

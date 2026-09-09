@@ -820,24 +820,29 @@ with account_tab:
 
 with ai_tab:
     st.markdown(
-        "已预设免费的 **DeepSeek V4 Flash（OpenRouter）**。"
-        "请先在 [OpenRouter Keys](https://openrouter.ai/settings/keys) 创建免费 API Key；"
+        "已预设性价比较高的 **DeepSeek V4 Flash 官方 API**。"
+        "请在 [DeepSeek API Keys](https://platform.deepseek.com/api_keys) 创建并复制密钥；"
         "密钥仅保存在后端进程内存中，重启后需要重新填写。"
     )
     with st.form("ai_config"):
         provider_url = st.text_input(
-            "OpenAI 兼容 API 地址", value="https://openrouter.ai/api/v1"
+            "OpenAI 兼容 API 地址", value="https://api.deepseek.com"
         )
         model = st.text_input(
             "模型名称",
-            value="deepseek/deepseek-v4-flash:free",
-            help="模型名末尾的 :free 表示使用 OpenRouter 免费线路。",
+            value="deepseek-v4-flash",
+            help="Flash 比 Pro 便宜且速度更快，能力足以生成结构化 OJ 题目。",
         )
         api_key = st.text_input("模型密钥", type="password")
         c1, c2, c3 = st.columns(3)
-        input_price = c1.number_input("输入价格", min_value=0.0, value=0.0)
-        output_price = c2.number_input("输出价格", min_value=0.0, value=0.0)
+        input_price = c1.number_input(
+            "输入价格（USD/百万 Token）", min_value=0.0, value=0.44
+        )
+        output_price = c2.number_input(
+            "输出价格（USD/百万 Token）", min_value=0.0, value=1.32
+        )
         price_unit = c3.number_input("计价 Token 单位", min_value=1, value=1_000_000)
+        st.caption("费用按官方高峰期、输入缓存未命中的价格保守估算，实际扣费以 DeepSeek 账单为准。")
         if st.form_submit_button("保存模型配置"):
             configured = api(
                 "PUT",
