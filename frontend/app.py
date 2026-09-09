@@ -25,6 +25,7 @@ for key, default in {
     "http": requests.Session(),
     "user": None,
     "last_submission_id": "",
+    "submission_lookup": "",
     "plagiarism_task_id": "",
     "ai_task_id": "",
     "ai_problem_result": None,
@@ -117,14 +118,15 @@ def show_submission(detail: dict[str, Any]) -> None:
     status_col.metric("评测任务状态", detail["status"])
     verdict_col.metric("判题结果", submission_verdict(detail, cases))
     if detail["status"] == "pending":
-        st.info("评测正在后台运行。点击“查询/刷新”可获取最新结果。")
+        st.info("评测正在后台运行，本区域会每秒自动刷新，完成后直接显示最终结果。")
         return
 
-    maximum_score = int(detail.get("counts", 0))
+    case_count = int(detail.get("counts", 0))
+    maximum_score = case_count * 10
     score_col, count_col = st.columns(2)
     score_col.metric("得分 / 满分", f"{detail.get('score', 0)} / {maximum_score}")
-    count_col.metric("测试点个数", maximum_score // 10)
-    st.caption("课程规定每个测试点 10 分，因此 counts=30 表示满分 30 分、共 3 个测试点。")
+    count_col.metric("测试点个数（counts）", case_count)
+    st.caption("counts 表示测试点个数；课程规定每个测试点 10 分，因此 counts=3 时满分为 30 分。")
 
     compile_col, run_col = st.columns(2)
     with compile_col:
@@ -270,6 +272,18 @@ def render_ai_progress() -> None:
         st.error(task.get("error") or "命题失败")
 
 
+# 在提交页面独立轮询最近一次提交，使整页操作不会清空结果，并自动展示状态变化。
+@st.fragment(run_every=1.0)
+def render_submission_progress() -> None:
+    submission_id = str(st.session_state.get("submission_lookup", "")).strip()
+    if not submission_id:
+        st.caption("提交代码后，评测过程和最终结果会显示在这里。")
+        return
+    detail = api("GET", f"/api/submissions/{submission_id}")
+    if detail:
+        show_submission(detail)
+
+
 with st.sidebar:
     st.text_input("后端地址", key="api_base")
     if st.session_state.user:
@@ -410,17 +424,18 @@ with submit_tab:
                     json={"problem_id": submit_problem, "language": language, "code": code},
                 )
                 if result:
-                    st.session_state.last_submission_id = result["submission_id"]
+                    submission_id = str(result["submission_id"])
+                    st.session_state.last_submission_id = submission_id
+                    st.session_state.submission_lookup = submission_id
                     st.rerun()
 
         lookup_id = st.text_input(
-            "提交 ID", value=st.session_state.last_submission_id, key="submission_lookup"
+            "提交 ID",
+            key="submission_lookup",
+            help="默认保留最近一次提交，也可以输入其他提交 ID 查询。",
         )
-        st.button("查询/刷新", disabled=not lookup_id.strip())
-        if lookup_id.strip():
-            detail = api("GET", f"/api/submissions/{lookup_id.strip()}")
-            if detail:
-                show_submission(detail)
+        st.button("立即刷新", disabled=not lookup_id.strip())
+        render_submission_progress()
 
 with records_tab:
     st.subheader("提交记录查询与筛选")

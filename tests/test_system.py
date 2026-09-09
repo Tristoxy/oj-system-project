@@ -95,7 +95,7 @@ def test_import_rejects_broken_submission_reference(
             "status": "pending",
             "details": [],
             "score": 0,
-            "counts": 10,
+            "counts": 1,
             "created_at": "2026-01-01T00:00:00+00:00",
         }
     )
@@ -150,7 +150,7 @@ def test_export_matches_official_submission_shape_and_round_trips(
     ).json()["data"]
     assert {"score": restored["score"], "counts": restored["counts"]} == {
         "score": 10,
-        "counts": 10,
+        "counts": 1,
     }
 
 
@@ -260,7 +260,7 @@ def test_import_rejects_naive_submission_timestamp(
             "status": "success",
             "details": [{"id": 1, "result": "AC", "time": 0, "memory": 1}],
             "score": 10,
-            "counts": 10,
+            "counts": 1,
             "created_at": "2026-01-01T00:00:00",
         }
     )

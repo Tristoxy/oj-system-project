@@ -67,11 +67,11 @@ class Submission(BaseModel):
             raise ValueError("created_at must include a timezone")
         return value
 
-    # 保证得分不超过总分，并确保同一提交的测例编号没有重复。
+    # counts 表示测例个数、每个测例 10 分；同时确保测例编号没有重复。
     @model_validator(mode="after")
     def validate_result_totals(self) -> "Submission":
-        if self.score > self.counts:
-            raise ValueError("score cannot exceed counts")
+        if self.score > self.counts * 10:
+            raise ValueError("score cannot exceed counts * 10")
         case_ids = [detail.id for detail in self.details]
         if len(case_ids) != len(set(case_ids)):
             raise ValueError("test case result ids must be unique")

@@ -23,7 +23,7 @@ def recompute_user_stats(state: dict[str, list[dict[str, Any]]]) -> None:
             for submission in user_submissions
             if submission.get("status") == "success"
             and submission.get("counts", 0) > 0
-            and submission.get("score") == submission.get("counts")
+            and submission.get("score") == submission.get("counts") * 10
         }
         user["submit_count"] = len(user_submissions)
         user["resolve_count"] = len(solved)

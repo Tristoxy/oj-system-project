@@ -49,17 +49,34 @@ def test_python_ac_and_wa(
     )
     assert accepted.json()["data"]["status"] == "pending"
     accepted_id = accepted.json()["data"]["submission_id"]
-    assert wait_for_result(admin_client, accepted_id) == {"score": 10, "counts": 10}
+    assert wait_for_result(admin_client, accepted_id) == {"score": 10, "counts": 1}
 
     wrong = admin_client.post(
         "/api/submissions/",
         json={"problem_id": "sum_2", "language": "python", "code": "print(0)"},
     )
     wrong_id = wrong.json()["data"]["submission_id"]
-    assert wait_for_result(admin_client, wrong_id) == {"score": 0, "counts": 10}
+    assert wait_for_result(admin_client, wrong_id) == {"score": 0, "counts": 1}
 
     log = admin_client.get(f"/api/submissions/{accepted_id}/log").json()["data"]
     assert log["details"][0]["result"] == "AC"
+
+
+# counts 只统计测例数量；默认 1001 有 3 个测例，满分仍按每个 10 分计算。
+def test_counts_reports_number_of_test_cases(admin_client: TestClient) -> None:
+    submitted = admin_client.post(
+        "/api/submissions/",
+        json={
+            "problem_id": "1001",
+            "language": "python",
+            "code": "a, b = map(int, input().split())\nprint(a + b)",
+        },
+    ).json()["data"]
+
+    assert wait_for_result(admin_client, submitted["submission_id"]) == {
+        "score": 30,
+        "counts": 3,
+    }
 
 
 # 函数 `test_cpp_judging`：负责当前测试或测试夹具。
@@ -79,7 +96,7 @@ def test_cpp_judging(
     submission_id = response.json()["data"]["submission_id"]
     assert wait_for_result(admin_client, submission_id, timeout=20) == {
         "score": 10,
-        "counts": 10,
+        "counts": 1,
     }
     detail = admin_client.get(f"/api/submissions/{submission_id}").json()["data"]
     assert detail["submission_id"] == submission_id
@@ -199,7 +216,7 @@ def test_submission_filters_pagination_and_rejudge(
 
     response = admin_client.put(f"/api/submissions/{ids[1]}/rejudge")
     assert response.json()["data"] == {"submission_id": ids[1], "status": "pending"}
-    assert wait_for_result(admin_client, ids[1]) == {"score": 0, "counts": 10}
+    assert wait_for_result(admin_client, ids[1]) == {"score": 0, "counts": 1}
 
 
 # 函数 `test_user_statistics_count_unique_solved_problems`：负责当前测试或测试夹具。
@@ -287,7 +304,7 @@ def test_rejudge_updates_user_statistics_while_pending(
 
     pending_user = admin_client.get("/api/users/1").json()["data"]
     assert pending_user["resolve_count"] == 0
-    assert wait_for_result(admin_client, submission_id) == {"score": 10, "counts": 10}
+    assert wait_for_result(admin_client, submission_id) == {"score": 10, "counts": 1}
 
 
 # 函数 `test_standard_and_strict_output_modes`：负责当前测试或测试夹具。
@@ -354,7 +371,7 @@ def test_dynamically_registered_language_executes(
     ).json()["data"]
     assert wait_for_result(admin_client, submission["submission_id"]) == {
         "score": 10,
-        "counts": 10,
+        "counts": 1,
     }
 
 
@@ -370,7 +387,7 @@ def test_completed_submission_is_not_changed_when_problem_is_edited(
     ).json()["data"]
     assert wait_for_result(admin_client, original["submission_id"]) == {
         "score": 10,
-        "counts": 10,
+        "counts": 1,
     }
 
     assert admin_client.put(
@@ -384,7 +401,7 @@ def test_completed_submission_is_not_changed_when_problem_is_edited(
     ).json()["data"]
     assert {"score": unchanged["score"], "counts": unchanged["counts"]} == {
         "score": 10,
-        "counts": 10,
+        "counts": 1,
     }
     later = admin_client.post(
         "/api/submissions/",
@@ -392,7 +409,7 @@ def test_completed_submission_is_not_changed_when_problem_is_edited(
     ).json()["data"]
     assert wait_for_result(admin_client, later["submission_id"]) == {
         "score": 0,
-        "counts": 10,
+        "counts": 1,
     }
 
     # 只有管理员显式重判才会刷新快照，因此原代码此时按修改后的测试点判定。
@@ -402,7 +419,7 @@ def test_completed_submission_is_not_changed_when_problem_is_edited(
     assert rejudge.status_code == 200
     assert wait_for_result(admin_client, original["submission_id"]) == {
         "score": 0,
-        "counts": 10,
+        "counts": 1,
     }
 
 
@@ -434,7 +451,7 @@ def test_pending_submission_uses_creation_time_judge_snapshot(
     ).json()["data"]
     assert {"score": result["score"], "counts": result["counts"]} == {
         "score": 10,
-        "counts": 10,
+        "counts": 1,
     }
 
 

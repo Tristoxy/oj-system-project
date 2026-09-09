@@ -136,6 +136,18 @@ class SystemService:
                 if problem.id not in known_problem_ids:
                     state["problems"].append(problem.model_dump(mode="json"))
 
+            # 旧版本把 counts 存成总分（测例数×10）；启动时按题目快照迁移为测例个数。
+            problems_by_id = {problem["id"]: problem for problem in state["problems"]}
+            for submission in state["submissions"]:
+                snapshot = submission.get("judge_snapshot") or {}
+                snapshot_problem = snapshot.get("problem") if isinstance(snapshot, dict) else None
+                problem = snapshot_problem or problems_by_id.get(submission.get("problem_id"))
+                if not isinstance(problem, dict) or not isinstance(problem.get("testcases"), list):
+                    continue
+                case_count = len(problem["testcases"])
+                if submission.get("counts") == case_count * 10:
+                    submission["counts"] = case_count
+
         await self.store.mutate(add_defaults)
 
     # 用空状态覆盖全部集合、清理衍生文件，再重新创建系统默认数据。

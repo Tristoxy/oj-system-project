@@ -42,7 +42,7 @@ raise SystemExit(0 if sorted(expected_words) == sorted(actual_words) else 1)
         },
     )
     submission_id = submitted.json()["data"]["submission_id"]
-    assert wait_for_result(admin_client, submission_id) == {"score": 10, "counts": 10}
+    assert wait_for_result(admin_client, submission_id) == {"score": 10, "counts": 1}
 
     deleted = admin_client.delete("/api/problems/unordered/spj")
     assert deleted.status_code == 200

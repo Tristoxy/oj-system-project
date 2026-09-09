@@ -71,7 +71,7 @@ def test_pending_submission_resumes_after_restart(tmp_path: Path) -> None:
             time.sleep(0.02)
         assert {"score": result["score"], "counts": result["counts"]} == {
             "score": 0,
-            "counts": 10,
+            "counts": 1,
         }
         log = second.get(f"/api/submissions/{submission_id}/log").json()["data"]
         assert log["details"][0]["result"] == "TLE"
