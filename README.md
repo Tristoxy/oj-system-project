@@ -2,7 +2,7 @@
 
 一个面向课程验收的异步 Online Judge。基础模块覆盖题目管理、Python/C++ 评测、评测
 列表、用户与权限、日志审计和 Streamlit 前端；进阶模块实现 AI 智能命题 R1–R4，另外
-保留 Special Judge、Docker 沙箱和 PDG 查重。
+保留 Special Judge 和 PDG 查重。
 
 ## 1. Windows CMD 快速运行
 
@@ -44,14 +44,11 @@ app/
 ├── core/                   配置、异常、分页、响应和命令安全
 ├── models/                 Pydantic 请求模型、持久化模型和校验器
 ├── services/               业务规则、权限后的数据操作和后台任务
-├── judge/runner.py         本地/Docker 编译执行、限时限内存和输出比较
+├── judge/runner.py         子进程编译执行、限时限内存和输出比较
 ├── plagiarism/pdg.py       AST/CFG/PDG 查重和相似节点映射
 └── repositories/state_store.py
                             加锁、深拷贝和原子 JSON 持久化
 frontend/app.py             Streamlit 用户、题目、评测和 AI 页面
-docker/                     Python/C++ 判题镜像定义
-scripts/build_judge_images.sh
-                            构建两个判题镜像的 Linux shell 脚本
 tests/                      接口、评测、权限、持久化和 AI 回归测试
 docs/                       要求对照、报告、安全说明和答辩材料
 ```
@@ -98,8 +95,7 @@ docs/                       要求对照、报告、安全说明和答辩材料
 
 ### 3.3 核心基础设施（`app/core/`、`app/dependencies.py`）
 
-- `config.py`：`judge_backend` 读取 local/auto/docker 模式；`secure_cookies` 读取 HTTPS
-  Secure Cookie 开关。
+- `config.py`：`secure_cookies` 读取 HTTPS Secure Cookie 开关。
 - `exceptions.py`：`ApiError.__init__` 保存业务错误；`error_content` 生成统一错误 JSON；
   `register_exception_handlers` 注册 400/401/403/404/500 等异常处理器，其中内部处理函数
   `handle_api_error`、`handle_validation_error`、`handle_http_error`、
@@ -175,12 +171,11 @@ docs/                       要求对照、报告、安全说明和答辩材料
 ### 3.7 评测和查重算法
 
 - `judge/runner.py`：`JudgeRunner.judge` 逐测例编译、运行和比较；`_resolve_limits` 按题目→语言
-  →系统解析限制；`_uses_docker` 选择后端；`_run_command` 构造本地/Docker 命令；`_execute`
+  →系统解析限制；`_run_command` 构造本地子进程命令；`_execute`
   执行并监控进程；`_communicate_limited` 限制输出并传入 stdin，其中闭包 `feed_input` 写入
   测试输入、`read_stream` 读取受限输出；`_memory_limiter` 和其闭包 `apply_limit`、
-  `_monitor_memory` 监控/限制内存；`_is_killed_returncode`、
-  `_looks_like_memory_error` 分类异常；`_kill_process_tree` 和 `_kill_docker_container` 清理
-  进程；`_compare_output` 比较标准/strict 输出；`_run_spj` 执行 SPJ；`_normalize` 归一化末尾空格。
+  `_monitor_memory` 监控/限制内存；`_looks_like_memory_error` 分类异常；`_kill_process_tree` 清理
+  进程组；`_compare_output` 比较标准/strict 输出；`_run_spj` 执行 SPJ；`_normalize` 归一化末尾空格。
   `ProcessResult` 保存一次进程执行结果。
 - `plagiarism/pdg.py`：`build_pdg` 按语言选择 AST 或 token 图；`_build_python_pdg` 构造节点和
   控制流，其中闭包 `add_node` 加节点、`build_block` 构造语句块；`_reaching_definition_edges`
@@ -214,24 +209,9 @@ docs/                       要求对照、报告、安全说明和答辩材料
 | 统一状态码和响应结构 | `app/core/exceptions.py`、`app/core/responses.py` |
 | 持久化、reset、导入导出 | `app/repositories/state_store.py`、`app/services/system_service.py` |
 | SPJ（额外功能） | `app/services/problem_service.py`、`app/judge/runner.py` |
-| Docker（额外功能） | `docker/`、`scripts/build_judge_images.sh`、`app/judge/runner.py` |
 | PDG 查重（额外功能） | `app/plagiarism/pdg.py`、`app/services/plagiarism_service.py` |
 
-## 5. Docker 镜像脚本说明
-
-`scripts/build_judge_images.sh` 不是 Python 代码，而是用于构建 Docker 隔离判题镜像的 shell 脚本：它读取
-`docker/judge-python.Dockerfile` 和 `docker/judge-cpp.Dockerfile`，分别生成 `oj-python:3.10`
-和 `oj-cpp:gcc13`。课程没有要求必须使用 WSL/Linux；Windows CMD 可以完成基础开发、运行和验收。
-只有在需要构建 Docker 隔离判题镜像时，才需要 Docker Desktop、WSL 或 Linux 中任一可用的 Docker 运行环境：
-
-```bash
-./scripts/build_judge_images.sh
-OJ_JUDGE_BACKEND=docker uvicorn app.main:app
-```
-
-脚本有用，应保留并提交；`note.md` 只是个人命令笔记，已加入 `.gitignore`，不提交。
-
-## 6. 验证和提交前检查
+## 5. Linux 兼容性和提交前检查
 
 ```cmd
 python -m compileall -q app tests frontend
@@ -240,9 +220,10 @@ git diff --check
 git status
 ```
 
-当前 Windows 环境结果：`68 passed, 1 skipped`。跳过项是仅能在 POSIX 系统验证的进程组测试；
-如需验证 Docker/POSIX 进程组等环境特性，可在 Linux/WSL 或启用 Docker Desktop 后额外执行，
-这不是课程硬性要求。真实 AI 模型调用、Docker daemon 和页面截图需要在验收前人工完成。
+WSL 不是硬性要求，但课程最终包含 Linux 自动评测，因此代码必须兼容 Linux。项目默认语言
+命令为 `python3` 和 `g++`，Linux 下使用 POSIX 进程组与 `resource.RLIMIT_AS`；Windows 下则
+自动复用当前 Python 解释器。Windows 用户建议在提交前用 WSL 执行上述检查。`note.md` 是个人
+命令笔记，已加入 `.gitignore`，不提交。真实 AI 模型调用和页面截图需要在验收前人工完成。
 
 课程页面：[实验概述](https://dbg-course.github.io/python-docs/oj/)、[API 文档](https://dbg-course.github.io/python-docs/oj/api/)、
 [评分标准](https://dbg-course.github.io/python-docs/oj/requirements/)、[AI 智能命题](https://dbg-course.github.io/python-docs/oj/project/advance/)。

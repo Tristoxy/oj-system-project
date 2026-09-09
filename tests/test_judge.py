@@ -1,6 +1,7 @@
 """End-to-end tests for Python/C++ judging and submission queries."""
 
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
@@ -10,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import DEFAULT_MEMORY_LIMIT, DEFAULT_TIME_LIMIT
-from app.judge.runner import JudgeRunner
+from app.judge.runner import JudgeRunner, ProcessResult
 from app.models.language import Language
 from app.models.problem import Problem
 
@@ -462,23 +463,12 @@ def test_resource_limit_priority_is_resolved_per_field(
     assert JudgeRunner._resolve_limits(problem, language) == expected
 
 
-# 函数 `test_windows_compatible_process_completion_without_sigkill`：负责当前测试或测试夹具。
-def test_windows_compatible_process_completion_without_sigkill(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A normal process result must not depend on the POSIX-only SIGKILL name."""
-    monkeypatch.delattr("app.judge.runner.signal.SIGKILL", raising=False)
-
-    assert JudgeRunner._is_killed_returncode(0) is False
-    assert JudgeRunner._is_killed_returncode(137) is True
-
-
 # 函数 `test_missing_python3_uses_current_interpreter`：负责当前测试或测试夹具。
 def test_missing_python3_uses_current_interpreter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runner = JudgeRunner(backend="local", spj_dir=tmp_path)
+    runner = JudgeRunner(spj_dir=tmp_path)
     source = tmp_path / "folder with spaces" / "Main.py"
     source.parent.mkdir()
     source.write_text("print(3)", encoding="utf-8")
@@ -506,3 +496,41 @@ def test_missing_python3_uses_current_interpreter(
     assert result.result == "AC"
     assert result.stdout.strip() == "3"
     assert Path(sys.executable).is_file()
+
+
+# 函数 `test_linux_runner_kills_descendants_after_parent_exits`：验证 Linux 进程组清理。
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="仅 POSIX 系统支持进程组测试")
+def test_linux_runner_kills_descendants_after_parent_exits(tmp_path: Path) -> None:
+    marker = tmp_path / "orphan-marker"
+    script = f"""
+import os
+import time
+
+child = os.fork()
+if child == 0:
+    os.close(0)
+    os.close(1)
+    os.close(2)
+    time.sleep(0.3)
+    with open({str(marker)!r}, "w", encoding="utf-8") as output:
+        output.write("leaked")
+    os._exit(0)
+print("parent finished")
+"""
+
+    # 函数 `run`：执行评测并等待潜在的孤儿进程写入标记文件。
+    async def run() -> ProcessResult:
+        runner = JudgeRunner(tmp_path)
+        result = await runner._execute(
+            ["python3", "-c", script],
+            "",
+            1,
+            128,
+            tmp_path,
+        )
+        await asyncio.sleep(0.5)
+        return result
+
+    result = asyncio.run(run())
+    assert result.result == "AC"
+    assert not marker.exists()

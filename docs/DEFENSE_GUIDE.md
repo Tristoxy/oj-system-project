@@ -14,7 +14,7 @@
 7. 导出 JSON、reset、重新登录并导入，展示数据恢复和 Session 清除。
 8. 配置一个可用模型，发起 AI 命题，展示实时进度、Token/费用和结果进入题目编辑表单。
 9. 再发起一个任务并中断，证明后台请求确实停止，而不只是停止前端动画。
-10. 时间允许时再展示额外的 SPJ、PDG 查重和 Docker 隔离能力。
+10. 时间允许时再展示额外的 SPJ 和 PDG 查重能力。
 
 ## 二、请求链路
 
@@ -25,7 +25,7 @@ flowchart TD
     C --> D[业务服务]
     D --> E[原子 JSON 状态库]
     D --> F[后台评测或查重]
-    F --> G[本地进程或 Docker]
+    F --> G[受限本地子进程]
     D --> H[AI 命题任务]
     H --> I[OpenAI 兼容服务]
 ```
@@ -34,7 +34,7 @@ flowchart TD
 - `app/dependencies.py`：在业务逻辑前完成登录和管理员检查。
 - `app/services/`：实现重复检查、权限后的状态规则、分页、任务调度和导入事务。
 - `app/repositories/state_store.py`：加锁、深拷贝、临时文件和原子替换。
-- `app/judge/runner.py`：编译、执行、stdin/stdout、超时、内存、容器和结果分类。
+- `app/judge/runner.py`：编译、执行、stdin/stdout、超时、内存和结果分类。
 - `app/plagiarism/pdg.py`：AST→CFG→PDG、到达定义和近似图匹配。
 - `app/models/`：用 Pydantic 拒绝缺字段、错类型、额外字段和越界数据。
 
@@ -60,8 +60,8 @@ flowchart TD
 - 编译命令失败为 CE。
 - 程序非零退出且不是内存错误为 RE。
 - 超过题目时间并被终止为 TLE。
-- 超过地址空间/RSS/Docker 内存限制为 MLE。
-- Docker、命令或输出上限等评测设施异常为 UNK。
+- 超过地址空间或 RSS 限制为 MLE。
+- 命令缺失或输出超过上限等评测设施异常为 UNK。
 
 ### 题目和语言都能配置资源限制，以谁为准？
 
@@ -73,11 +73,6 @@ flowchart TD
 不会。所有登录用户可修改普通题目字段，详情也会返回 `testcases`；submission 创建时冻结
 题目和语言配置，之后改题既不触发隐式重评，也不改变排队或完成记录。只有管理员显式 rejudge
 会刷新快照并使用最新配置。
-
-### Docker 为什么还要唯一容器名？
-
-只终止 `docker run` 客户端不一定终止容器。唯一名称允许超时、取消和输出洪泛时再执行容器清理；
-`--interactive` 则保证测试输入真正传入容器程序。
 
 ### PDG 不是简单文本相似度吗？
 
@@ -110,19 +105,12 @@ git status
 git log --oneline --decorate
 ```
 
-Docker 环境另执行：
-
-```bash
-./scripts/build_judge_images.sh
-OJ_JUDGE_BACKEND=docker uvicorn app.main:app
-```
-
 ## 六、必须诚实说明的边界
 
-- 本地评测有资源与进程清理，但不能隔离宿主文件和网络；不可信代码必须使用 Docker。
+- 评测有资源与进程清理，但不提供宿主文件和网络隔离，只适用于课程实验和受控验收环境。
 - JSON 锁只覆盖单个 API 进程，不应启动多个 Uvicorn worker 共同写同一个 `data/`。
 - C++ 查重目前使用 token 图回退；Python 才有完整 AST→CFG→PDG。
 - 这是课程项目，不含 HTTPS 终止、CSRF token、分布式队列或数据库事务。
-- 当前开发环境没有 Docker daemon，最终报告应放入本人机器上的真实容器运行截图。
+- Windows 可用于开发，但提交前建议在 WSL 或其他 Linux 环境复测课程功能。
 - AI 命题依赖用户提供的 OpenAI Chat Completions 兼容服务；模型密钥是进程内配置，重启后
   需要重新输入。模型生成题目和测试点仍必须由命题人审阅，不能把模型输出直接视为正确答案。

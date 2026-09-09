@@ -1,8 +1,7 @@
-"""Local and Docker-backed code runner with resource limits."""
+"""使用本地子进程并限制资源的代码评测器。"""
 
 import asyncio
 import os
-import secrets
 import signal
 import shlex
 import shutil
@@ -16,7 +15,7 @@ import psutil
 
 try:
     import resource
-except ImportError:  # pragma: no cover - resource is unavailable on Windows
+except ImportError:  # pragma: no cover - Windows 不提供 resource 模块
     resource = None
 
 from app.core.config import DEFAULT_MEMORY_LIMIT, DEFAULT_TIME_LIMIT
@@ -38,8 +37,7 @@ class JudgeRunner:
     MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 
     # 函数 `__init__`：负责当前模块中的对应操作。
-    def __init__(self, backend: str, spj_dir: Path) -> None:
-        self.backend = backend
+    def __init__(self, spj_dir: Path) -> None:
         self.spj_dir = spj_dir
 
     # 函数 `judge`：负责当前模块中的对应操作。
@@ -52,12 +50,9 @@ class JudgeRunner:
         with tempfile.TemporaryDirectory(prefix="oj-") as directory_text:
             directory = Path(directory_text)
             source = directory / f"Main{language.file_ext}"
-            docker = self._uses_docker(language)
-            executable_name = "Main.exe" if os.name == "nt" and not docker else "Main"
+            executable_name = "Main.exe" if os.name == "nt" else "Main"
             executable = directory / executable_name
             source.write_text(code, encoding="utf-8")
-            if docker:
-                os.chmod(directory, 0o777)
 
             time_limit, memory_limit = self._resolve_limits(problem, language)
 
@@ -119,7 +114,7 @@ class JudgeRunner:
     # 函数 `_resolve_limits`：负责当前模块中的对应操作。
     @staticmethod
     def _resolve_limits(problem: Problem, language: Language) -> tuple[float, int]:
-        """Resolve problem, language, then system defaults as clarified by course staff."""
+        """按题目、语言、系统默认值的顺序解析资源限制。"""
         time_limit = problem.time_limit
         if time_limit is None:
             time_limit = language.time_limit
@@ -133,14 +128,6 @@ class JudgeRunner:
             memory_limit = DEFAULT_MEMORY_LIMIT
         return time_limit, memory_limit
 
-    # 函数 `_uses_docker`：负责当前模块中的对应操作。
-    def _uses_docker(self, language: Language) -> bool:
-        if self.backend == "local":
-            return False
-        if self.backend == "docker":
-            return True
-        return shutil.which("docker") is not None and language.name in {"python", "cpp"}
-
     # 函数 `_run_command`：负责当前模块中的对应操作。
     async def _run_command(
         self,
@@ -153,64 +140,22 @@ class JudgeRunner:
         memory_limit: int,
         language: Language,
     ) -> ProcessResult:
-        docker = self._uses_docker(language)
-        container_name: str | None = None
-        if docker:
-            container_source = Path("/workspace") / source.name
-            container_executable = Path("/workspace") / executable.name
-            inner = shlex.split(
-                template.format(src=str(container_source), exe=str(container_executable))
-            )
-            image = (
-                os.getenv("OJ_PYTHON_IMAGE", "oj-python:3.10")
-                if language.name == "python"
-                else os.getenv("OJ_CPP_IMAGE", "oj-cpp:gcc13")
-            )
-            container_name = f"oj-{secrets.token_hex(8)}"
-            args = [
-                "docker",
-                "run",
-                "--rm",
-                "--interactive",
-                f"--name={container_name}",
-                "--network=none",
-                f"--memory={memory_limit}m",
-                f"--memory-swap={memory_limit}m",
-                "--cpus=1",
-                "--pids-limit=64",
-                "--cap-drop=ALL",
-                "--security-opt=no-new-privileges",
-                "--read-only",
-                "--tmpfs=/tmp:rw,noexec,nosuid,size=32m",
-                f"--volume={directory}:/workspace:rw",
-                "--workdir=/workspace",
-                "--user=65534:65534",
-                image,
-                *inner,
-            ]
-            process_memory = memory_limit + 128
-        else:
-            # 先拆分可信命令模板，再插入路径，避免 Windows 临时路径中的空格或反斜杠被破坏。
-            args = [
-                part.format(src=str(source), exe=str(executable))
-                for part in shlex.split(template)
-            ]
-            # ``python3`` is the conventional command on Linux, while a standard
-            # Windows 通常只提供 python.exe 或 py；若配置的命令不存在，
-            # 就复用当前服务进程使用的 Python 解释器。
-            if args and args[0] in {"python", "python3"} and (
-                os.name == "nt" or shutil.which(args[0]) is None
-            ):
-                args[0] = sys.executable
-            process_memory = memory_limit
+        # 先拆分可信命令模板，再插入路径，避免 Windows 临时路径中的空格或反斜杠被破坏。
+        args = [
+            part.format(src=str(source), exe=str(executable))
+            for part in shlex.split(template)
+        ]
+        # Linux 使用 python3；Windows 或缺少该命令时复用当前 Python 解释器。
+        if args and args[0] in {"python", "python3"} and (
+            os.name == "nt" or shutil.which(args[0]) is None
+        ):
+            args[0] = sys.executable
         return await self._execute(
             args,
             stdin,
             timeout,
-            process_memory,
+            memory_limit,
             directory,
-            use_process_limit=not docker,
-            docker_container=container_name,
         )
 
     # 函数 `_execute`：负责当前模块中的对应操作。
@@ -221,12 +166,9 @@ class JudgeRunner:
         timeout: float,
         memory_limit: int,
         cwd: Path,
-        *,
-        use_process_limit: bool = True,
-        docker_container: str | None = None,
     ) -> ProcessResult:
         started = time.perf_counter()
-        preexec_fn = self._memory_limiter(memory_limit) if use_process_limit else None
+        preexec_fn = self._memory_limiter(memory_limit)
         try:
             process = await asyncio.create_subprocess_exec(
                 *args,
@@ -250,36 +192,23 @@ class JudgeRunner:
             )
         except asyncio.TimeoutError:
             timed_out = True
-            if docker_container is not None:
-                await self._kill_docker_container(docker_container)
             self._kill_process_tree(process)
             stdout_bytes, stderr_bytes, output_exceeded = await communicate
         except asyncio.CancelledError:
-            if docker_container is not None:
-                await asyncio.shield(self._kill_docker_container(docker_container))
             self._kill_process_tree(process)
             await asyncio.gather(communicate, monitor, return_exceptions=True)
             raise
         memory_mb, memory_exceeded = await monitor
-        if docker_container is not None and (output_exceeded or memory_exceeded):
-            await self._kill_docker_container(docker_container)
         await process.wait()
-        if use_process_limit:
-            # 程序可能派生子进程、关闭继承管道并让父进程正常退出；
-            # 因此始终清理隔离的进程组，防止子进程在本地判题结束后继续存活。
-            self._kill_process_tree(process)
+        # 程序可能派生子进程、关闭继承管道并让父进程正常退出；
+        # 因此始终清理隔离的进程组，防止子进程在判题结束后继续存活。
+        self._kill_process_tree(process)
         elapsed = time.perf_counter() - started
         if memory_exceeded:
             result: CaseResult = "MLE"
         elif timed_out:
             result = "TLE"
         elif output_exceeded:
-            result = "UNK"
-        elif not use_process_limit and self._is_killed_returncode(process.returncode):
-            # Docker 会将因内存不足被终止的容器报告为 SIGKILL/137。
-            result = "MLE"
-        elif process.returncode in {125, 126, 127} and not use_process_limit:
-            # Docker CLI、镜像或入口点失败属于判题基础设施错误。
             result = "UNK"
         elif process.returncode != 0 and self._looks_like_memory_error(stderr_bytes):
             result = "MLE"
@@ -294,15 +223,6 @@ class JudgeRunner:
             elapsed=elapsed,
             memory_mb=memory_mb,
         )
-
-    # 函数 `_is_killed_returncode`：负责当前模块中的对应操作。
-    @staticmethod
-    def _is_killed_returncode(returncode: int | None) -> bool:
-        """Recognize Docker OOM exit codes without assuming POSIX signals exist."""
-        if returncode == 137:
-            return True
-        sigkill = getattr(signal, "SIGKILL", None)
-        return sigkill is not None and returncode == -sigkill
 
     # 函数 `_communicate_limited`：负责当前模块中的对应操作。
     async def _communicate_limited(
@@ -413,24 +333,6 @@ class JudgeRunner:
                 process.kill()
         except (ProcessLookupError, PermissionError):
             pass
-
-    # 函数 `_kill_docker_container`：负责当前模块中的对应操作。
-    @staticmethod
-    async def _kill_docker_container(container_name: str) -> None:
-        """Best-effort removal when the attached Docker client is interrupted."""
-        try:
-            cleanup = await asyncio.create_subprocess_exec(
-                "docker",
-                "kill",
-                container_name,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await asyncio.wait_for(cleanup.wait(), timeout=2)
-        except (OSError, asyncio.TimeoutError):
-            if "cleanup" in locals() and cleanup.returncode is None:
-                cleanup.kill()
-                await cleanup.wait()
 
     # 函数 `_compare_output`：负责当前模块中的对应操作。
     async def _compare_output(

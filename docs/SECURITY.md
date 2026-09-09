@@ -2,9 +2,9 @@
 
 ## 信任边界
 
-API 参数、导入文件、用户代码和动态语言命令均视为不可信。管理员上传的 SPJ 仍会进行
-静态检查，并在 Docker 后端下隔离运行。`local` 后端仅用于开发和基础验收；它不能阻止
-代码读取宿主文件或访问网络。
+API 参数、导入文件、用户代码和动态语言命令均视为不可信。管理员上传的 SPJ 会进行静态
+检查。评测器使用受限本地子进程，但不能阻止代码读取宿主文件或访问网络，因此系统只适合
+课程实验和受控验收环境，不应直接开放给不可信公网用户。
 
 ## 已实现控制
 
@@ -27,33 +27,9 @@ API 参数、导入文件、用户代码和动态语言命令均视为不可信�
 - stdout/stderr 各最多保留 4 MiB；超量立即终止，防止父进程内存耗尽。
 - 用户源码、可执行文件和测例仅位于每次任务独立的临时目录。
 
-### Docker 后端
-
-每次编译、运行和 SPJ 都启动一个一次性容器，并使用：
-
-```text
---rm
---interactive
---name=<random name>
---network=none
---memory=<effective limit>
---memory-swap=<effective limit>
---cpus=1
---pids-limit=64
---cap-drop=ALL
---security-opt=no-new-privileges
---read-only
---tmpfs=/tmp:rw,noexec,nosuid,size=32m
---user=65534:65534
-```
-
-只把单次任务临时目录挂载到 `/workspace`。不会把 Docker socket 挂入 API 容器，因为该
-socket 等价于宿主 root 权限。超时、输出洪泛、任务取消或监控异常会根据随机容器名执行
-额外清理，避免只杀死 Docker 客户端后容器仍在后台运行。
-
 ## 已知边界
 
 - JSON 文件锁只保证单个 API 进程内的一致性；不要用多个 Uvicorn worker 共享同一目录。
-- Docker 镜像应定期更新；如需演示隔离判题，可在 Docker Desktop、WSL 或 Linux 环境预先构建。
-- 静态 SPJ 检查不能替代沙箱；运行不可信 SPJ 时必须启用 Docker。
+- 本地资源限制和静态 SPJ 检查不能替代完整沙箱，不要在生产环境执行来源不可信的代码。
+- Windows 可用于开发；提交前应在 Linux 环境验证 `resource.RLIMIT_AS` 和 POSIX 进程组清理。
 - 当前系统面向课程实验，不包含 HTTPS 终止、CSRF token、分布式队列或数据库级事务。

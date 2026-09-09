@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from app.core.config import judge_backend
 from app.judge.runner import JudgeRunner
 from app.repositories.state_store import StateStore
 from app.services.ai_service import AIProblemService
@@ -27,7 +26,7 @@ class AppContainer:
         self.languages = LanguageService(self.store)
         self.logs = LogService(self.store)
         self.ai = AIProblemService(self.store)
-        self.runner = JudgeRunner(judge_backend(), self.store.spj_dir)
+        self.runner = JudgeRunner(self.store.spj_dir)
         self.submissions = SubmissionService(self.store, self.runner)
         self.plagiarism = PlagiarismService(self.store)
 

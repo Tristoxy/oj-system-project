@@ -35,19 +35,16 @@
 | AI R3 每秒进度刷新与真实任务中断 | `frontend/app.py`、`ai_service.py` | `test_ai.py`、人工演示 |
 | AI R4 Token 与费用统计 | `ai_service.py`、`frontend/app.py` | `test_ai.py` |
 | 额外：Special Judge | `problem_service.py`、`judge/runner.py` | `test_spj.py` |
-| 额外：Docker 强制隔离模式 | `docker/`、`judge/runner.py` | stdin/清理/隔离参数测试；需本机实测 |
 | 额外：AST→CFG→PDG 查重 | `plagiarism/`、`plagiarism_service.py` | 分支/汇合/循环/数据依赖测试 |
 | HTTP 黑盒权限矩阵 | `app/api/`、`dependencies.py` | `test_course_contract.py` |
 | Conventional Commits | Git 历史 | `git log --oneline` |
-| 避免提交大文件/运行数据 | `.gitignore`、`.dockerignore` | `git count-objects -vH` |
+| 避免提交大文件/运行数据 | `.gitignore` | `git count-objects -vH` |
 
 ## 提交前人工检查
 
-1. 可直接在 Windows CMD 执行 `python -m pytest -q`；仅 POSIX 进程组相关测试需要 Linux/WSL，属于额外环境验证而非课程硬性要求。
-2. 有 Docker 时构建评测镜像，以 `OJ_JUDGE_BACKEND=docker` 手动提交 Python/C++ 的
-   AC、TLE 和 MLE 程序。
-3. 启动 Streamlit，演示注册、登录、用户管理、题目增删改查、提交、详情和日志。
-4. 使用本人可用的 OpenAI 兼容模型完成一次 AI 命题，展示实时进度、Token/费用、结果入库；
+1. Windows 可用于日常开发；提交前建议在 WSL 或其他 Linux 环境执行 `python -m pytest -q`，确认兼容课程 Linux 自动评测。
+2. 启动 Streamlit，演示注册、登录、用户管理、题目增删改查、提交、详情和日志。
+3. 使用本人可用的 OpenAI 兼容模型完成一次 AI 命题，展示实时进度、Token/费用、结果入库；
    再启动一次慢任务并现场中断。
-5. 把 `docs/COURSE_REPORT.md` 中的个人信息和 AI 使用比例替换为实际情况，并加入演示截图。
-6. 确认 `git status` 干净，仓库中没有 `data/`、`.venv/`、压缩包或镜像文件。
+4. 把 `docs/COURSE_REPORT.md` 中的个人信息和 AI 使用比例替换为实际情况，并加入演示截图。
+5. 确认 `git status` 干净，仓库中没有 `data/`、`.venv/`、压缩包或生成文件。
