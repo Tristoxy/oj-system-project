@@ -819,18 +819,24 @@ with account_tab:
                 st.caption("暂无日志访问记录。")
 
 with ai_tab:
-    st.caption(
-        "已预设 OpenAI GPT-5.6 Luna。模型密钥仅保存在后端进程内存中，重启后需要重新配置。"
+    st.markdown(
+        "已预设免费的 **DeepSeek V4 Flash（OpenRouter）**。"
+        "请先在 [OpenRouter Keys](https://openrouter.ai/settings/keys) 创建免费 API Key；"
+        "密钥仅保存在后端进程内存中，重启后需要重新填写。"
     )
     with st.form("ai_config"):
         provider_url = st.text_input(
-            "OpenAI 兼容 API 地址", value="https://api.openai.com/v1"
+            "OpenAI 兼容 API 地址", value="https://openrouter.ai/api/v1"
         )
-        model = st.text_input("模型名称", value="gpt-5.6-luna")
+        model = st.text_input(
+            "模型名称",
+            value="deepseek/deepseek-v4-flash:free",
+            help="模型名末尾的 :free 表示使用 OpenRouter 免费线路。",
+        )
         api_key = st.text_input("模型密钥", type="password")
         c1, c2, c3 = st.columns(3)
-        input_price = c1.number_input("输入价格", min_value=0.0, value=0.20)
-        output_price = c2.number_input("输出价格", min_value=0.0, value=1.20)
+        input_price = c1.number_input("输入价格", min_value=0.0, value=0.0)
+        output_price = c2.number_input("输出价格", min_value=0.0, value=0.0)
         price_unit = c3.number_input("计价 Token 单位", min_value=1, value=1_000_000)
         if st.form_submit_button("保存模型配置"):
             configured = api(
