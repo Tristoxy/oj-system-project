@@ -4,13 +4,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
+# 管理员发起查重时提交
 class PlagiarismRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     problem_id: str = Field(min_length=1)
     threshold: float = Field(default=0.8, ge=0, le=1)
 
-
+# 两个提交之间的查重结果
 class PlagiarismMatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -20,7 +20,7 @@ class PlagiarismMatch(BaseModel):
     is_clone: bool
     node_mapping: list[dict[str, int]] = Field(default_factory=list)
 
-
+# 查重任务
 class PlagiarismTask(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

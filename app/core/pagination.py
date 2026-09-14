@@ -7,7 +7,7 @@ from app.core.exceptions import ApiError
 
 T = TypeVar("T")
 
-
+# 处理分页
 # 校验 page/page_size 必须成对且为正数，再切出对应的一页数据。
 def paginate(items: list[T], page: int | None, page_size: int | None) -> list[T]:
     if page is not None and page_size is None:

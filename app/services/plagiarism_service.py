@@ -20,7 +20,7 @@ from app.services.state_helpers import next_numeric_id
 
 logger = logging.getLogger(__name__)
 
-
+# 获取所有提交、获取两份代码的pdg图，比较、计算代码相似度、判断是否超过阈值、生成json报告、任务状态改完success
 class PlagiarismService:
     # 保存状态仓库并追踪当前进程中的查重后台任务，便于关闭时统一取消。
     def __init__(self, store: StateStore) -> None:

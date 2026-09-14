@@ -22,7 +22,7 @@ class ProblemService:
         problems = sorted(state["problems"], key=lambda item: item["id"])
         return [{"id": item["id"], "title": item["title"]} for item in problems]
 
-    # 按题号读取完整题目配置并通过 Pydantic 恢复类型。
+    # 按题目id获取完整题目配置并通过 Pydantic 恢复类型。
     async def get_problem(self, problem_id: str) -> Problem:
         state = await self.store.read()
         raw = next((item for item in state["problems"] if item["id"] == problem_id), None)
@@ -30,7 +30,7 @@ class ProblemService:
             raise ApiError(404, "problem not found")
         return Problem.model_validate(raw)
 
-    # 将已校验的创建请求转换为存储模型，并保证题号全局唯一。
+    # 新增题目，将已校验的创建请求转换为存储模型，并保证题号全局唯一。
     async def add_problem(self, payload: ProblemCreate) -> Problem:
         problem = Problem.model_validate(payload.model_dump())
 
@@ -58,7 +58,7 @@ class ProblemService:
         if spj_file.exists():
             spj_file.unlink()
 
-    # 合并请求中实际提供的字段，拒绝改题号并重新校验完整题目。
+    # 修改题目，合并请求中实际提供的字段，拒绝改题号并重新校验完整题目。
     async def update_problem(self, problem_id: str, payload: ProblemUpdate) -> Problem:
         changes = payload.model_dump(exclude_unset=True)
         requested_id = changes.pop("id", None)
@@ -93,7 +93,7 @@ class ProblemService:
 
         return await self.store.mutate(update)
 
-    # 把经过题号正则校验的 ID 映射为数据目录中的固定 Python 文件路径。
+    # 把经过题号正则校验的 ID 映射为数据目录中的SPJ文件的固定 Python 文件路径。
     def spj_path(self, problem_id: str) -> Path:
         return self.store.spj_dir / f"{problem_id}.py"
 

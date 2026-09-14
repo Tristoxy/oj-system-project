@@ -80,7 +80,7 @@ def test_banned_user_with_existing_session_gets_403(client: TestClient) -> None:
 
     client.post(
         "/api/auth/login",
-        json={"username": "Tristoxy", "password": "Qtc521521"},
+        json={"username": "Tristoxy", "password": "tristoxy"},
     )
     assert client.put(f"/api/users/{user_id}/role", json={"role": "banned"}).status_code == 200
 

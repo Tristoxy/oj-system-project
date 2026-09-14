@@ -1,5 +1,5 @@
 """Submission lifecycle, filtering, rejudging, and background evaluation."""
-
+# 整个提交生命周期
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
@@ -27,7 +27,7 @@ class SubmissionService:
         self.runner = runner
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
-    # 执行一分钟限流和外键校验，保存题目/语言快照后创建异步评测。
+    # 执行一分钟限流（提交次数）和外键校验，保存题目/语言快照后创建异步评测。
     async def submit(self, payload: SubmissionCreate, user: User) -> Submission:
         now = datetime.now(timezone.utc)
 
@@ -79,7 +79,7 @@ class SubmissionService:
         await self._schedule(submission.submission_id)
         return submission
 
-    # 按提交编号读取完整内部记录并恢复为 Submission 模型。
+    # 按提交编号返回完整提交记录并恢复为 Submission 模型。
     async def get_submission(self, submission_id: str) -> Submission:
         state = await self.store.read()
         raw = next(
@@ -90,6 +90,7 @@ class SubmissionService:
             raise ApiError(404, "submission not found")
         return Submission.model_validate(raw)
 
+    # 返回前端需要的评测结果
     # 校验本人或管理员权限，pending 时返回基础状态，结束后附加编译运行信息。
     async def result_for(self, submission_id: str, user: User) -> dict[str, object]:
         submission = await self.get_submission(submission_id)
@@ -114,6 +115,7 @@ class SubmissionService:
         )
         return data
 
+    # 提交记录页面
     # 校验筛选条件和用户权限，分页返回带最终 verdict 的提交摘要。
     async def list_submissions(
         self,
@@ -166,6 +168,7 @@ class SubmissionService:
             result.append(summary)
         return {"total": total, "submissions": result}
 
+    # 重新评测某次提交
     # 读取当前题目和语言重新生成快照、清空旧结果，并再次调度该提交。
     async def rejudge(self, submission_id: str) -> Submission:
         # 在状态锁内将指定提交恢复为 pending，同时重置分数、详情和运行信息。
@@ -239,6 +242,7 @@ class SubmissionService:
             await asyncio.sleep(0.02)
         raise TimeoutError(f"submission {submission_id} did not finish")
 
+    # 保证同一条提交不会同时运行多个评测任务
     # 每个提交只保留一个评测 Task；重复调度时先取消并等待旧 Task。
     async def _schedule(self, submission_id: str) -> None:
         previous = self._tasks.get(submission_id)
@@ -254,7 +258,7 @@ class SubmissionService:
                 self._tasks.pop(submission_id, None)
 
         task.add_done_callback(remove)
-
+    # 得到测试点结果，分数，相关信息，更新提交记录
     # 使用提交快照执行全部测例、计算分数和 PDG，再原子写入成功或错误终态。
     async def _evaluate(self, submission_id: str) -> None:
         try:

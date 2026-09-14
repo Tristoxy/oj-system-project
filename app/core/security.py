@@ -9,7 +9,7 @@ import string
 
 from app.core.exceptions import ApiError
 
-
+# 密码安全、动态编程语言命令安全
 PASSWORD_ITERATIONS = 240_000
 MAX_PASSWORD_ITERATIONS = 1_000_000
 ALLOWED_EXECUTABLES = {
@@ -25,7 +25,7 @@ ALLOWED_EXECUTABLES = {
 }
 FORBIDDEN_SHELL_TOKENS = {";", "&&", "||", "|", ">", "<", "`", "$", "\n", "\r"}
 
-
+# 把明文密码转化为安全哈希
 # 为每个密码生成随机盐，并用 PBKDF2-SHA256 派生可持久化的哈希字符串。
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)

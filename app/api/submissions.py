@@ -11,7 +11,7 @@ from app.models.user import User
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
-
+# 校验用户信息后，提交任务并返回提交id
 # 为当前用户创建 pending 提交并启动异步评测，接口不等待判题完成。
 @router.post("/")
 async def submit_code(

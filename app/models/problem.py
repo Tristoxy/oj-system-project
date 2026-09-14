@@ -46,7 +46,7 @@ class ProblemCreate(BaseModel):
 class Problem(ProblemCreate):
     """Stored problem model; currently identical to the creation payload."""
 
-
+# 用于管理员修改题目，字段可选
 class ProblemUpdate(BaseModel):
     """Partial problem edit; dedicated admin-only settings are intentionally absent."""
 

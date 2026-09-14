@@ -11,7 +11,7 @@ from app.models.user import Credentials, User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-
+# 登录
 # 校验账号密码，创建服务端 Session，并把 HttpOnly Session ID 写入 Cookie。
 @router.post("/login")
 async def login(

@@ -12,7 +12,7 @@ from app.main import create_app
 def admin_login(client: TestClient) -> None:
     response = client.post(
         "/api/auth/login",
-        json={"username": "Tristoxy", "password": "Qtc521521"},
+        json={"username": "Tristoxy", "password": "tristoxy"},
     )
     assert response.status_code == 200
 

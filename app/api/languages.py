@@ -21,7 +21,7 @@ async def list_languages(
     del current_user
     return success_response({"name": await container.languages.list_languages()})
 
-
+# 注册新语言
 # 接收已登录用户提交的语言配置，校验命令安全后写入持久化状态。
 @router.post("/")
 async def register_language(

@@ -23,7 +23,7 @@ from app.models.language import Language
 from app.models.problem import Problem, TestCase
 from app.models.submission import CaseResult, TestCaseResult
 
-
+# 一次程序进程运行结果（结果、错误、运行时间、峰值内存）
 @dataclass
 class ProcessResult:
     result: CaseResult
@@ -32,7 +32,7 @@ class ProcessResult:
     elapsed: float = 0.0
     memory_mb: float = 0.0
 
-
+# 接受SPJ文件目录
 class JudgeRunner:
     MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 
@@ -40,6 +40,7 @@ class JudgeRunner:
     def __init__(self, spj_dir: Path) -> None:
         self.spj_dir = spj_dir
 
+    # 评测入口！
     # 写入源文件、可选编译，再逐测例运行并根据 standard/strict/spj 模式判定结果。
     async def judge(
         self,
@@ -47,15 +48,17 @@ class JudgeRunner:
         language: Language,
         problem: Problem,
     ) -> list[TestCaseResult]:
+        # 每次评测使用独立目录
         with tempfile.TemporaryDirectory(prefix="oj-") as directory_text:
             directory = Path(directory_text)
+            # 写源代码文件
             source = directory / f"Main{language.file_ext}"
             executable_name = "Main.exe" if os.name == "nt" else "Main"
             executable = directory / executable_name
             source.write_text(code, encoding="utf-8")
 
             time_limit, memory_limit = self._resolve_limits(problem, language)
-
+            # 如果有compilecmd就先编译
             if language.compile_cmd:
                 compile_result = await self._run_command(
                     language.compile_cmd,
@@ -110,7 +113,7 @@ class JudgeRunner:
                     )
                 )
             return results
-
+    # 解析题目、语言、系统默认限制
     # 资源限制优先采用题目设置，其次语言设置，最后回退到系统默认值。
     @staticmethod
     def _resolve_limits(problem: Problem, language: Language) -> tuple[float, int]:
@@ -158,7 +161,7 @@ class JudgeRunner:
             directory,
         )
 
-    # 启动无 Shell 子进程，并发监控时间、内存和输出上限，最终映射为 OJ 状态。
+    # 启动用户程序，并发监控时间、内存和输出上限，判断结果，最终映射为 OJ 状态。
     async def _execute(
         self,
         args: list[str],
@@ -234,7 +237,7 @@ class JudgeRunner:
             elapsed=elapsed,
             memory_mb=memory_mb,
         )
-
+    # 获取用户程序信息
     # 并发写入标准输入和读取 stdout/stderr，超过总输出上限时立即终止进程树。
     async def _communicate_limited(
         self,
@@ -279,6 +282,7 @@ class JudgeRunner:
         stderr, stderr_exceeded = stderr_result
         return stdout, stderr, stdout_exceeded or stderr_exceeded
 
+    # 限制内存
     # 在 POSIX 子进程启动前生成 RLIMIT_AS 设置函数；Windows 由 psutil 监控兜底。
     @staticmethod
     def _memory_limiter(memory_limit: int):
@@ -345,6 +349,7 @@ class JudgeRunner:
         except (ProcessLookupError, PermissionError):
             pass
 
+    # 比较输出
     # 按 strict 原文、spj 脚本或 standard 行尾规范化三种模式比较输出。
     async def _compare_output(
         self,

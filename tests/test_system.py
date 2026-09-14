@@ -20,7 +20,7 @@ def test_export_reset_and_import(
     assert exported.status_code == 200
     bundle = exported.json()["data"]
     assert bundle["users"][0]["password"].startswith("pbkdf2_sha256$")
-    assert bundle["users"][0]["password"] != "Qtc521521"
+    assert bundle["users"][0]["password"] != "tristoxy"
 
     reset = admin_client.post("/api/reset/")
     assert reset.status_code == 200
@@ -28,7 +28,7 @@ def test_export_reset_and_import(
 
     admin_client.post(
         "/api/auth/login",
-        json={"username": "Tristoxy", "password": "Qtc521521"},
+        json={"username": "Tristoxy", "password": "tristoxy"},
     )
     imported = admin_client.post(
         "/api/import/",
@@ -39,7 +39,7 @@ def test_export_reset_and_import(
 
     admin_client.post(
         "/api/auth/login",
-        json={"username": "Tristoxy", "password": "Qtc521521"},
+        json={"username": "Tristoxy", "password": "tristoxy"},
     )
     assert len(admin_client.get("/api/problems/").json()["data"]) == 4
 
@@ -143,7 +143,7 @@ def test_export_matches_official_submission_shape_and_round_trips(
 
     admin_client.post(
         "/api/auth/login",
-        json={"username": "Tristoxy", "password": "Qtc521521"},
+        json={"username": "Tristoxy", "password": "tristoxy"},
     )
     restored = admin_client.get(
         f"/api/submissions/{submitted['submission_id']}"
@@ -183,7 +183,7 @@ def test_user_listing_handles_mixed_imported_ids(admin_client: TestClient) -> No
     ).status_code == 200
     admin_client.post(
         "/api/auth/login",
-        json={"username": "Tristoxy", "password": "Qtc521521"},
+        json={"username": "Tristoxy", "password": "tristoxy"},
     )
 
     users = admin_client.get("/api/users/")

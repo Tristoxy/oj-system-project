@@ -12,26 +12,28 @@ from app.core.config import DEFAULT_DATA_DIR
 from app.core.exceptions import register_exception_handlers
 
 
-# 创建一套可指定数据目录的 FastAPI 应用，便于生产运行和测试隔离。
+# 创建整个fastapi应用,datadir为默认数据保存目录
 def create_app(data_dir: Path | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
-    container = AppContainer(data_dir or DEFAULT_DATA_DIR)
+    container = AppContainer(data_dir or DEFAULT_DATA_DIR) # 创建服务容器，包括用户、题目、ai、查重、评测器等
 
-    # 启动时初始化数据和待处理任务，退出时可靠取消所有后台任务。
+    # 应用生命周期，负责启动初始化和关闭后台任务
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        await container.initialize()
+        await container.initialize() # 应用启动时执行
         try:
             yield
         finally:
-            await container.close()
+            await container.close() # 应用关闭时执行
 
+    # 创建fastapi对象
     application = FastAPI(
-        title="Python Course OJ",
+        title="Online Judge System",
         description="A small online judge built for the Python programming course.",
         version="1.0.0",
         lifespan=lifespan,
     )
+    # 保存容器、注册异常处理器、注册路由
     application.state.container = container
     register_exception_handlers(application)
     application.include_router(health.router)

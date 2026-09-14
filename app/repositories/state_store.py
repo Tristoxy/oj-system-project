@@ -10,6 +10,7 @@ from typing import Any, TypeVar
 
 
 T = TypeVar("T")
+# 数据表
 COLLECTIONS = (
     "users",
     "problems",
@@ -25,8 +26,9 @@ COLLECTIONS = (
 def empty_state() -> dict[str, list[dict[str, Any]]]:
     return {name: [] for name in COLLECTIONS}
 
-
+# json数据库的操作对象
 class StateStore:
+    # 创建锁，用于防止多个请求同时写json导致数据冲突
     # 根据数据根目录确定状态、SPJ 和查重报告路径，并创建进程内重入锁。
     def __init__(self, data_dir: Path) -> None:
         self.data_dir = data_dir
@@ -39,10 +41,12 @@ class StateStore:
     async def initialize(self) -> None:
         await asyncio.to_thread(self._initialize_sync)
 
+    # 读取数据
     # 在线程池中加锁读取状态，并返回深拷贝以防调用者绕过持久化修改数据。
     async def read(self) -> dict[str, list[dict[str, Any]]]:
         return await asyncio.to_thread(self._read_sync)
 
+    # 数据修改
     # 在线程池和同一把锁内执行“读取—修改—原子写回”，并返回操作结果副本。
     async def mutate(self, operation: Callable[[dict[str, list[dict[str, Any]]]], T]) -> T:
         return await asyncio.to_thread(self._mutate_sync, operation)

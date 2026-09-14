@@ -10,4 +10,12 @@ data/
 temp/
 .streamlit/
 
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
 note.md

@@ -9,18 +9,18 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Role = Literal["user", "admin", "banned"]
 
-
+# 登陆注册
 class Credentials(BaseModel):
     model_config = ConfigDict(extra="forbid")
     username: str = Field(min_length=3, max_length=40)
     password: str = Field(min_length=6)
 
-
+# 用于管理员修改用户角色
 class RoleUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     role: Role
 
-
+# 用户完整信息
 class User(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -43,7 +43,7 @@ class User(BaseModel):
     def public(self) -> dict[str, object]:
         return self.model_dump(exclude={"password"})
 
-
+# 登录会话id，进而不用每次都提交用户名密码
 class Session(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

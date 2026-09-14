@@ -15,7 +15,7 @@ from app.models.problem import ProblemCreate
 from app.models.user import User
 from app.repositories.state_store import StateStore
 
-
+# 内存中保存模型配置
 @dataclass(frozen=True)
 class _RuntimeModelConfig:
     provider_url: str
@@ -153,7 +153,8 @@ class AIProblemService:
             if record is not None and record.status not in {"cancelled", "error"}:
                 record.status = "running"
                 record.progress = message
-
+    # 完整ai出题流程
+    # 整理需求、构造提示词、调用模型、解析json、验证题目格式、计算token、保存结果
     # 串联提示词构造、模型请求、结果校验和用量计算，并收敛终态错误信息。
     async def _generate(
         self,
@@ -257,6 +258,7 @@ class AIProblemService:
             raise ValueError("model response must be an object")
         return data
 
+    # 解析模型返回的json
     # 去除可选 Markdown 代码围栏，验证题目字段，并按配置计算 Token 成本。
     @staticmethod
     def _parse_response(

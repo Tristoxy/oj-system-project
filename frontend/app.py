@@ -7,8 +7,8 @@ import requests
 import streamlit as st
 
 
-st.set_page_config(page_title="Python Course OJ", page_icon="⚖️", layout="wide")
-st.title("Python Course Online Judge")
+st.set_page_config(page_title="Online Judge System", page_icon="⚖️", layout="wide")
+st.title("Online Judge System")
 
 CASE_RESULT_HELP = {
     "AC": "答案正确（Accepted）",
@@ -559,7 +559,7 @@ with manage_tab:
 
 with language_tab:
     st.subheader("动态注册新语言")
-    st.caption("课程要求所有已登录用户都可以注册语言。命令中的 {src} 表示源码，{exe} 表示编译产物。")
+    st.caption("所有已登录用户都可以注册语言。命令中的 {src} 表示源码，{exe} 表示编译产物。")
     st.write("当前语言：" + "、".join(languages.get("name", [])))
     with st.form("register_language"):
         language_name = st.text_input("语言名称", placeholder="例如：python_copy")

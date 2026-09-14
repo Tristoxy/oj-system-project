@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 AITaskStatus = Literal["pending", "running", "success", "cancelled", "error"]
 
-
+# 模型配置
 class ModelConfigUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -29,14 +29,14 @@ class ModelConfigUpdate(BaseModel):
             raise ValueError("provider_url must be an http(s) URL")
         return normalized
 
-
+# 用户发起AI出题时提交
 class ProblemTaskCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     requirement: str = Field(min_length=3, max_length=20_000)
     problem_id: str | None = Field(default=None, min_length=1, max_length=200)
 
-
+# token消耗
 class AIUsage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -46,7 +46,7 @@ class AIUsage(BaseModel):
     cost: float = Field(default=0, ge=0)
     currency: str = "USD"
 
-
+# 一个ai出题任务
 class AIProblemTask(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

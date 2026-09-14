@@ -15,6 +15,7 @@ class AuthService:
     def __init__(self, store: StateStore) -> None:
         self.store = store
 
+    # 根据用户名查找，验证密码哈希，检查是否封禁，生成随机sessionid及过期时间，返回用户、session
     # 校验凭据和封禁状态，清除过期会话后创建随机且有过期时间的新 Session。
     async def login(self, credentials: Credentials) -> tuple[User, str]:
         # 在一次原子状态修改中完成用户查找、密码验证、过期清理和会话写入。

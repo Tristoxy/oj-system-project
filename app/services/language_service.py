@@ -16,7 +16,7 @@ class LanguageService:
         state = await self.store.read()
         return [item["name"] for item in state["languages"]]
 
-    # 按名称读取并校验完整语言配置，不存在时返回 404。
+    # 按语言名称读取并校验完整语言配置，不存在时返回 404。
     async def get_language(self, name: str) -> Language:
         state = await self.store.read()
         raw = next((item for item in state["languages"] if item["name"] == name), None)
@@ -24,6 +24,7 @@ class LanguageService:
             raise ApiError(404, "language not found")
         return Language.model_validate(raw)
 
+    # 管理员注册新语言
     # 校验编译/运行命令的安全性和必要占位符，再持久化新语言。
     async def register(self, payload: LanguageCreate) -> Language:
         validate_command_template(payload.run_cmd)

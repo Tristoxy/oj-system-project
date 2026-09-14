@@ -19,7 +19,7 @@ class VisibilityUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     public_cases: bool = False
 
-
+# 题目列表及题目简要信息
 # 返回题号和标题组成的题库索引，供检索和选择题目使用。
 @router.get("/")
 async def list_problems(
@@ -30,7 +30,7 @@ async def list_problems(
     problems = await container.problems.list_problems()
     return success_response(problems)
 
-
+# 新增题目
 # 接收并校验完整题目配置，创建题目并返回其唯一题号。
 @router.post("/", status_code=status.HTTP_200_OK)
 async def add_problem(
@@ -42,7 +42,7 @@ async def add_problem(
     created = await container.problems.add_problem(problem)
     return success_response({"id": created.id}, msg="add success")
 
-
+# 查询题目
 # 按路径中的题号返回题面、样例、限制、测例和可选字段。
 @router.get("/{problem_id}")
 async def get_problem(
@@ -54,7 +54,7 @@ async def get_problem(
     problem = await container.problems.get_problem(problem_id)
     return success_response(problem.model_dump(mode="json"))
 
-
+# 修改题目 更新
 # 将请求中的部分字段合并进指定题目；题号本身不允许改变。
 @router.put("/{problem_id}")
 async def update_problem(
@@ -95,7 +95,7 @@ async def update_log_visibility(
         msg="log visibility updated",
     )
 
-
+# 管理员上传spj
 # 仅管理员可上传至多 256 KB 的 Python SPJ 文件并启用 SPJ 模式。
 @router.post("/{problem_id}/spj")
 async def upload_spj(

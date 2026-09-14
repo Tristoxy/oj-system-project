@@ -21,7 +21,7 @@ class ApiError(Exception):
         self.status_code = status_code
         self.message = message
 
-
+# 生成错误json
 # 按课程 API 约定生成统一的 code/msg/data 错误响应体。
 def error_content(status_code: int, message: str, data: Any = None) -> dict[str, Any]:
     return {"code": status_code, "msg": message, "data": data}

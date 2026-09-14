@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from app.core.exceptions import ApiError
-from app.core.security import hash_password, is_password_hash
+from app.core.security import hash_password, is_password_hash, verify_password
 from app.models.language import Language
 from app.models.problem import Problem
 from app.models.submission import Submission
@@ -31,6 +31,10 @@ DEFAULT_LANGUAGES = [
         memory_limit=128,
     ),
 ]
+
+INITIAL_ADMIN_USERNAME = "Tristoxy"
+INITIAL_ADMIN_PASSWORD = "tristoxy"
+LEGACY_INITIAL_ADMIN_PASSWORD = "Qtc521521"
 
 DEFAULT_PROBLEMS = [
     Problem(
@@ -110,7 +114,15 @@ class SystemService:
 
         # 在状态锁内执行幂等默认数据迁移，已有同名语言或题号不会重复添加。
         def add_defaults(state):
-            if not any(user.get("username") == "Tristoxy" for user in state["users"]):
+            initial_admin = next(
+                (user for user in state["users"] if user.get("username") == INITIAL_ADMIN_USERNAME),
+                None,
+            )
+            if initial_admin is not None and verify_password(
+                LEGACY_INITIAL_ADMIN_PASSWORD, initial_admin.get("password", "")
+            ):
+                initial_admin["password"] = hash_password(INITIAL_ADMIN_PASSWORD)
+            if initial_admin is None:
                 legacy_admin = next(
                     (
                         user
@@ -120,8 +132,8 @@ class SystemService:
                     None,
                 )
                 if legacy_admin is not None:
-                    legacy_admin["username"] = "Tristoxy"
-                    legacy_admin["password"] = hash_password("Qtc521521")
+                    legacy_admin["username"] = INITIAL_ADMIN_USERNAME
+                    legacy_admin["password"] = hash_password(INITIAL_ADMIN_PASSWORD)
                 else:
                     initial_admin = self._initial_admin()
                     if any(user.get("user_id") == "1" for user in state["users"]):
@@ -259,8 +271,8 @@ class SystemService:
     def _initial_admin() -> User:
         return User(
             user_id="1",
-            username="Tristoxy",
-            password=hash_password("Qtc521521"),
+            username=INITIAL_ADMIN_USERNAME,
+            password=hash_password(INITIAL_ADMIN_PASSWORD),
             role="admin",
             join_time=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         )

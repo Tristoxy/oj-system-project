@@ -12,7 +12,7 @@ from app.models.user import Credentials, RoleUpdate, User
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-# 公开注册普通用户，密码由服务层哈希后保存。
+# 公开注册普通用户，无管理员依赖，密码由服务层哈希后保存。
 @router.post("/")
 async def register_user(
     payload: Credentials,
@@ -45,7 +45,7 @@ async def list_users(
     del admin
     return success_response(await container.users.list_users(page, page_size))
 
-
+# 用户页面
 # 允许用户查看自己、管理员查看任意用户的公开资料。
 @router.get("/{user_id}")
 async def get_user(

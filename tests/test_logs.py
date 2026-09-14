@@ -41,7 +41,7 @@ def test_private_and_public_log_visibility_is_audited(
     private_log = admin_client.get(f"/api/submissions/{submission_id}/log")
     assert private_log.status_code == 403
 
-    login(admin_client, "Tristoxy", "Qtc521521")
+    login(admin_client, "Tristoxy", "tristoxy")
     visibility = admin_client.put(
         "/api/problems/sum_2/log_visibility",
         json={"public_cases": True},
@@ -54,7 +54,7 @@ def test_private_and_public_log_visibility_is_audited(
     assert public_log.json()["data"]["details"][0]["result"] == "AC"
     assert admin_client.get(f"/api/submissions/{submission_id}").status_code == 403
 
-    login(admin_client, "Tristoxy", "Qtc521521")
+    login(admin_client, "Tristoxy", "tristoxy")
     audit = admin_client.get("/api/logs/access/?problem_id=sum_2")
     assert audit.status_code == 200
     records = audit.json()["data"]

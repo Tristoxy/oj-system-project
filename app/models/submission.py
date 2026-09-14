@@ -13,14 +13,14 @@ SubmissionStatus = Literal["pending", "success", "error"]
 CaseResult = Literal["AC", "WA", "TLE", "MLE", "RE", "CE", "UNK"]
 IMPORTED_SUBMISSION_TIME = "1970-01-01T00:00:00+00:00"
 
-
+# 用户提交代码时前端传给后端的数据
 class SubmissionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     problem_id: str = Field(min_length=1)
     language: str = Field(min_length=1)
     code: str = Field(min_length=1, max_length=200_000)
 
-
+# 一个测试点的评测结果
 class TestCaseResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -29,14 +29,14 @@ class TestCaseResult(BaseModel):
     time: float = Field(ge=0)
     memory: float = Field(ge=0)
 
-
+# 题目配置语言配置快照，便于更改配置后查看记录
 class JudgeSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     problem: Problem
     language: Language
 
-
+# 完整提交
 class Submission(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

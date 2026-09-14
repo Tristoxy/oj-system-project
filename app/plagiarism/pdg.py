@@ -10,15 +10,15 @@ import tokenize
 from collections import Counter
 from typing import Any
 
-
+# 根据语言生成程序依赖图
 # Python 代码优先构建 AST/CFG/PDG；其他语言或语法错误则降级为 Token 流图。
 def build_pdg(code: str, language: str) -> dict[str, Any]:
     if language == "python":
         return _build_python_pdg(code)
     return _build_token_pdg(code)
 
-
-# 综合节点多重集、带类型边和语句顺序三项相似度，输出 0–1 的加权分数。
+# 计算两个程序图的相似度
+# 比较节点标签、带类型边结构和节点顺序三项相似度，输出 0–1 的加权分数。
 def graph_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     left_nodes = Counter(node["label"] for node in left.get("nodes", []))
     right_nodes = Counter(node["label"] for node in right.get("nodes", []))
@@ -39,7 +39,7 @@ def graph_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     return round(0.55 * node_score + 0.30 * edge_score + 0.15 * sequence_score, 4)
 
 
-# 按规范化标签贪心匹配未使用节点，生成报告可展示的节点与源代码行号对应关系。
+# 找出相似节点，记录左侧节点id，右侧节点id，对应代码行号
 def map_similar_nodes(
     left: dict[str, Any],
     right: dict[str, Any],
@@ -200,7 +200,7 @@ def _build_python_pdg(code: str) -> dict[str, Any]:
     return {"language": "python", "nodes": nodes, "edges": edges}
 
 
-# 用到达定义不动点分析找出每次变量读取可能对应的定义节点，并建立数据边。
+# 计算数据依赖关系
 def _reaching_definition_edges(
     node_count: int,
     flow_edges: set[tuple[int, int]],

@@ -33,7 +33,7 @@ class UserService:
 
         return await self.store.mutate(create)
 
-    # 按用户 ID 查找并恢复为 User 模型，不存在时返回 404。
+    # 按用户 ID 查找用户并恢复为 User 模型，不存在时返回 404。
     async def get_user(self, user_id: str) -> User:
         state = await self.store.read()
         raw = next((user for user in state["users"] if user["user_id"] == user_id), None)
@@ -41,6 +41,7 @@ class UserService:
             raise ApiError(404, "user not found")
         return User.model_validate(raw)
 
+    # 管理员查看用户列表，按用户id排序
     # 重新计算统计值、按数字 ID 排序并返回分页后的脱敏用户资料。
     async def list_users(self, page: int | None, page_size: int | None) -> dict[str, object]:
         state = await self.store.read()
