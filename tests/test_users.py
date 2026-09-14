@@ -84,6 +84,7 @@ def test_banned_user_with_existing_session_gets_403(client: TestClient) -> None:
     )
     assert client.put(f"/api/users/{user_id}/role", json={"role": "banned"}).status_code == 200
 
+    client.cookies.clear()
     client.cookies.set("oj_session", user_session)
     response = client.get("/api/problems/")
     assert response.status_code == 403
