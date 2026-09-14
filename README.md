@@ -10,7 +10,7 @@
 - 时间、内存和输出限制
 - Standard Judge、Strict Judge 与 Special Judge
 - 提交记录查询、测试点日志与重判
-- 基于程序结构的 Python 代码相似度分析
+- 基于程序结构的 Python 代码相似度查重分析
 - AI 辅助命题、进度查询与 Token 使用统计
 - FastAPI 后端与 Streamlit Web 前端
 
@@ -85,5 +85,3 @@ python -m compileall -q app tests frontend
 python -m pytest -q
 git diff --check
 ```
-
-项目同时配置了 GitHub Actions，在 push 或 Pull Request 时自动运行测试。
